@@ -1,0 +1,100 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props"
+            Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')"/>
+    <PropertyGroup>
+        <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+        <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+        <ProjectGuid>{48F0B221-DAB5-4072-9481-4A4EF050A9D3}</ProjectGuid>
+        <OutputType>Library</OutputType>
+        <AppDesignerFolder>Properties</AppDesignerFolder>
+        <RootNamespace>Bladedancer</RootNamespace>
+        <AssemblyName>Bladedancer</AssemblyName>
+        <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+        <FileAlignment>512</FileAlignment>
+        <LangVersion>latest</LangVersion>
+    </PropertyGroup>
+    <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+        <PlatformTarget>AnyCPU</PlatformTarget>
+        <DebugSymbols>true</DebugSymbols>
+        <DebugType>portable</DebugType>
+        <Optimize>false</Optimize>
+        <OutputPath>bin\Debug\</OutputPath>
+        <DefineConstants>DEBUG;TRACE</DefineConstants>
+        <ErrorReport>prompt</ErrorReport>
+        <WarningLevel>4</WarningLevel>
+    </PropertyGroup>
+    <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+        <PlatformTarget>AnyCPU</PlatformTarget>
+        <DebugType>pdbonly</DebugType>
+        <Optimize>true</Optimize>
+        <OutputPath>bin\Release\</OutputPath>
+        <DefineConstants>TRACE</DefineConstants>
+        <ErrorReport>prompt</ErrorReport>
+        <WarningLevel>4</WarningLevel>
+    </PropertyGroup>
+    <ItemGroup>
+        <Reference Include="System"/>
+        <Reference Include="System.Core"/>
+        <Reference Include="System.Data"/>
+        <Reference Include="System.Xml"/>
+        <Reference Include="ThunderRoad">
+          <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\ThunderRoad.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine">
+          <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.AnimationModule">
+          <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.AnimationModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.CoreModule">
+          <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.PhysicsModule">
+          <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
+        </Reference>
+    </ItemGroup>
+    <ItemGroup>
+        <Compile Include="Blade.cs" />
+        <Compile Include="Misc.cs" />
+        <Compile Include="Misc\HasAnySpell.cs" />
+        <Compile Include="ModOptions.cs" />
+        <Compile Include="PID.cs" />
+        <Compile Include="Quiver.cs" />
+        <Compile Include="SequenceTracker.cs" />
+        <Compile Include="Skills\SkillBladelock.cs" />
+        <Compile Include="Skills\SkillAimAssist.cs" />
+        <Compile Include="Skills\SkillBladePunch.cs" />
+        <Compile Include="Skills\SkillBladestorm.cs" />
+        <Compile Include="Skills\SkillCauterizingRain.cs" />
+        <Compile Include="Skills\SkillChainDetonate.cs" />
+        <Compile Include="Skills\SkillCrownOfKnives.cs" />
+        <Compile Include="Skills\SkillDoubleTrouble.cs" />
+        <Compile Include="Skills\SkillForceBlades.cs" />
+        <Compile Include="Skills\SkillGoreTalons.cs" />
+        <Compile Include="Skills\SkillImbueBlades.cs" />
+        <Compile Include="Skills\SkillLethalReturn.cs" />
+        <Compile Include="Skills\SkillPeripheralBlock.cs" />
+        <Compile Include="Skills\SkillRotarySlingshot.cs" />
+        <Compile Include="Skills\SkillSeekerTwin.cs" />
+        <Compile Include="Skills\SkillStartWithFullCrown.cs" />
+        <Compile Include="Skills\SkillVortexBlender.cs" />
+        <Compile Include="SpellCastSlingblade.cs" />
+        <Compile Include="Properties\AssemblyInfo.cs"/>
+    </ItemGroup>
+    <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets"/>
+    <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+         Other similar extension points exist, see Microsoft.Common.targets.
+    <Target Name="BeforeBuild">
+    </Target>
+    <Target Name="AfterBuild">
+    </Target>
+    -->
+    <PropertyGroup>
+        <PostBuildEvent>copy /Y $(TargetPath) "E:\U12SDK\BuildStaging\Catalogs\default\Bladedancer"
+            copy /Y "$(TargetDir)\$(TargetName).pdb" "E:\U12SDK\BuildStaging\Catalogs\default\Bladedancer"
+            copy /Y $(TargetPath) "D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\StreamingAssets\Mods\Bladedancer"
+            copy /Y "$(TargetDir)\$(TargetName).pdb" "D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\StreamingAssets\Mods\Bladedancer"
+        </PostBuildEvent>
+    </PropertyGroup>
+</Project>

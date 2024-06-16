@@ -1,30 +1,24 @@
-﻿using ThunderRoad;
+﻿using Bladedancer.Misc;
+using ThunderRoad;
 using UnityEngine;
 
 namespace Bladedancer.Skills;
 
-public class SkillBladestorm : SpellMergeData {
+public class SkillBladestorm : SpellBladeMergeData {
     [SkillCategory("Bladestorm", Category.Base, 3)]
-    [ModOptionFloatValues(0.05f, 0.3f, 0.05f)]
-    [ModOptionSlider, ModOption("Bladestorm Spawn Rate", "How fast Bladestorm replenishes daggers", defaultValueIndex = 5)]
-    public static float spawnCooldown = 0.3f;
-    
-    [SkillCategory("Bladestorm", Category.Base, 3)]
-    [ModOptionFloatValues(0.05f, 0.2f, 0.05f)]
-    [ModOptionSlider, ModOption("Bladestorm Fire Rate", "How fast Bladestorm fires daggers", defaultValueIndex = 1)]
-    public static float shootCooldown = 0.15f;
+    [ModOptionFloatValuesDefault(0.05f, 0.2f, 0.05f, 0.15f)]
+    [ModOptionSlider, ModOption("Bladestorm Fire Rate", "How fast Bladestorm fires daggers")]
+    public static float shootCooldown;
 
     public float sprayDaggerMinHandAngle = 20f;
-    protected float lastSpawn;
     protected float lastShoot;
 
     public float spinSpeed = 360;
     protected float spinAmount = 0;
     protected float spinMult = 1;
 
-    private bool started = false;
-
     protected Transform centerPoint;
+    protected bool spraying;
 
     public float velocity = 20f;
 
@@ -41,43 +35,30 @@ public class SkillBladestorm : SpellMergeData {
     public override void Load(Mana mana) {
         base.Load(mana);
         centerPoint = new GameObject().transform;
-        started = false;
     }
     
     public override void Merge(bool active) {
         base.Merge(active);
-        if (active) {
-        } else {
-            started = false;
-            Quiver.Get(mana.creature).SetMode(Mode.Crown);
-            Quiver.Get(mana.creature).ignoreSelf.Remove(this);
-            SkillDoubleTrouble.InvokeOnMergeEnd(this);
-        }
+        spraying = false;
+        if (active) return;
+        OnMergeEnd(Quiver.Get(mana.creature));
     }
 
-    public void OnMergeStart() {
-        if (!mana.casterLeft.isFiring || !mana.casterRight.isFiring) return;
-        started = true;
-        currentCharge = 0;
-        (mana.casterLeft.spellInstance as SpellCastSlingblade)?.OnCastStop();
-        (mana.casterRight.spellInstance as SpellCastSlingblade)?.OnCastStop();
-        if (Quiver.TryGet(mana.creature, out var quiver)) {
-            quiver.RetrieveNearby(true);
-            quiver.target = centerPoint.transform;
-            quiver.lookDirection = Vector3.forward;
-            quiver.SetMode(Mode.Slicer, true);
-            quiver.ignoreSelf.Add(this);
-        }
-
-        SkillDoubleTrouble.InvokeOnMergeStart(this);
+    public override void OnMergeStart(Quiver quiver) {
+        base.OnMergeStart(quiver);
+        spraying = false;
+        quiver.target = centerPoint;
+        quiver.lookDirection = Vector3.forward;
+        quiver.SetMode(Mode.Slicer, true);
     }
 
-    public override void Unload() {
-        base.Unload();
-        Quiver.Get(mana.creature).SetMode(Mode.Crown);
-        Quiver.Get(mana.creature).ignoreSelf.Remove(this);
-        SkillDoubleTrouble.InvokeOnMergeEnd(this);
+    public override void OnMergeEnd(Quiver quiver) {
+        base.OnMergeEnd(quiver);
+        quiver?.SetMode(Mode.Crown);
     }
+
+    public override bool AllowImbue(Quiver quiver) => false;
+    public override bool AllowSpawn(Quiver quiver) => base.AllowSpawn(quiver) && !spraying;
 
     public override void Update() {
         base.Update();
@@ -89,35 +70,27 @@ public class SkillBladestorm : SpellMergeData {
             Quaternion.LookRotation(pointDir, Quaternion.AngleAxis(spinAmount, pointDir) * thumbDir));
 
         if (!mana.mergeActive) return;
-        if (!started) {
-            OnMergeStart();
-        }
 
         spinMult = 1;
-        var ray = new Ray(mana.mergePoint.position,
-            Vector3.Slerp(mana.casterLeft.magicSource.up, mana.casterRight.magicSource.up, 0.5f));
-        float leftAngle = Vector3.SignedAngle(ray.direction, mana.casterLeft.magicSource.up,
+
+        var ray = new Ray(centerPoint.transform.position, pointDir);
+
+        float leftAngle = Vector3.SignedAngle(ray.direction, mana.casterLeft.ragdollHand.PointDir,
             Vector3.Cross(mana.creature.centerEyes.position - ray.origin,
                 mana.casterLeft.magicSource.position - ray.origin).normalized);
-        float rightAngle = Vector3.SignedAngle(ray.direction, mana.casterRight.magicSource.up,
+        float rightAngle = Vector3.SignedAngle(ray.direction, mana.casterRight.ragdollHand.PointDir,
             Vector3.Cross(mana.casterRight.magicSource.position - ray.origin,
                 mana.creature.centerEyes.position - ray.origin).normalized);
+        
+        spraying = leftAngle < -sprayDaggerMinHandAngle && rightAngle > sprayDaggerMinHandAngle;
 
-        if (leftAngle > -sprayDaggerMinHandAngle || rightAngle < sprayDaggerMinHandAngle) {
-            // Not spraying daggers
-            if (Time.time - lastSpawn < spawnCooldown || Quiver.Get(mana.creature).IsFull) return;
-            lastSpawn = Time.time;
-            mana.casterLeft.ragdollHand.HapticTick();
-            mana.casterRight.ragdollHand.HapticTick();
-            Blade.Spawn((blade, _) => {
-                blade.ReturnToQuiver(mana.creature, true);
-            }, mana.mergePoint.position, Quaternion.LookRotation(pointDir), mana.creature, true);
-            return;
-        }
+        if (!spraying) return;
 
         // Spraying daggers
         spinMult = 2;
-        if (currentCharge <= 0.8f || Time.time - lastShoot < shootCooldown || Quiver.Get(mana.creature).Count == 0) return;
+        if (currentCharge <= 0.8f
+            || Time.time - lastShoot < shootCooldown
+            || Quiver.Get(mana.creature).Count == 0) return;
         lastShoot = Time.time;
         Quiver.Get(mana.creature).Fire(ray.direction * velocity, out _, false, false);
         mana.casterLeft.ragdollHand.HapticTick();

@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Bladedancer.Skills;
 using SequenceTracker;
 using ThunderRoad;
 using ThunderRoad.Skill.Spell;
@@ -14,69 +17,63 @@ public class SpellCastSlingblade : SpellCastCharge {
     public HandleData handleData;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValues(5, 20, 5)]
-    [ModOption("Joint Mass Scale", "Blade joint-mode mass scale. Makes joint-based movement stronger.", defaultValueIndex = 1)]
-    public static float jointMassScale = 10f;
+    [ModOptionSlider, ModOptionFloatValuesDefault(5, 20, 5, 10)]
+    [ModOption("Joint Mass Scale", "Blade joint-mode mass scale. Makes joint-based movement stronger.")]
+    public static float jointMassScale;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValues(250, 1000, 250)]
-    [ModOption("Joint Spring", "Blade joint-mode spring strength", defaultValueIndex = 1)]
-    public static float jointSpring = 500f;
+    [ModOptionSlider, ModOptionFloatValuesDefault(250, 1000, 250, 500)]
+    [ModOption("Joint Spring", "Blade joint-mode spring strength")]
+    public static float jointSpring;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValues(5, 50, 5)]
-    [ModOption("Joint Damper", "Joint spring damper", defaultValueIndex = 1)]
-    public static float jointDamper = 10f;
+    [ModOptionSlider, ModOptionFloatValuesDefault(5, 50, 5, 10)]
+    [ModOption("Joint Damper", "Joint spring damper")]
+    public static float jointDamper;
+
+    [SkillCategory("General")]
+    [ModOptionSlider, ModOptionFloatValuesDefault(5, 30, 1, 20)]
+    [ModOption("Scale Speed", "Speed at which weapons scale themselves (when necessary).")]
+    public static float scaleSpeed;
 
     public static float handJointLerp = 20f;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValues(5000, 100000, 5000)]
-    [ModOption("Joint Max Force", "Joint maximum force", defaultValueIndex = 1)]
-    public static float jointMaxForce = 10000f;
-
-    public static ModOptionInt[] forceModeValues = {
-        new("Force", (int)ForceMode.Force),
-        new("Impulse", (int)ForceMode.Impulse),
-        new("Acceleration", (int)ForceMode.Acceleration),
-        new("Velocity Change", (int)ForceMode.VelocityChange)
-    };
+    [ModOptionSlider, ModOptionFloatValuesDefault(5000, 100000, 5000, 10000)]
+    [ModOption("Joint Max Force", "Joint maximum force")]
+    public static float jointMaxForce;
 
     // [SkillCategory("General")]
-    // [ModOptionValues(nameof(forceModeValues), typeof(int))]
-    // [ModOption("PID Force Mode", "PID force application mode", defaultValueIndex = 3)]
-    // public static int pidForceModeInt = (int)ForceMode.Acceleration;
-
+    // [ModOption("PID Force Mode", "PID force application mode")]
     public static ForceMode pidForceMode = ForceMode.Acceleration;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValues(50, 300, 50)]
-    [ModOption("PID Max Force", "PID Max Force", defaultValueIndex = 1)]
-    public static float pidMaxForce = 100;
+    [ModOptionSlider, ModOptionFloatValuesDefault(50, 300, 50, 100)]
+    [ModOption("PID Max Force", "PID Max Force")]
+    public static float pidMaxForce;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValues(0, 3, 1)]
-    [ModOption("Despawn Time", "Time before a blade despawns or is collected", defaultValueIndex = 3)]
-    public static float collectTime = 3f;
+    [ModOptionSlider, ModOptionFloatValuesDefault(0, 5, 1, 3)]
+    [ModOption("Despawn Time", "Time before a blade despawns or is collected")]
+    public static float collectTime;
 
-    [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValues(8, 20, 2)]
-    [ModOption("Throw Force", "Force added when thrown using Slingblade", defaultValueIndex = 2)]
-    public static float throwForce = 12f;
+    [SkillCategory("Slingblade", Category.Base, 1, 0)]
+    [ModOptionSlider, ModOptionFloatValuesDefault(8, 20, 2, 12)]
+    [ModOption("Throw Force", "Force added when thrown using Slingblade")]
+    public static float throwForce;
 
-    [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValues(2, 10, 2)]
-    [ModOption("AI Throw Force", "Forced throw hand velocity for NPCs using Slingblade", defaultValueIndex = 2)]
-    public static float aiThrowForce = 7;
+    [SkillCategory("Slingblade", Category.Base, 1, 0)]
+    [ModOptionSlider, ModOptionFloatValuesDefault(2, 10, 2, 7)]
+    [ModOption("AI Throw Force", "Forced throw hand velocity for NPCs using Slingblade")]
+    public static float aiThrowForce;
 
-    [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValues(1, 5, 0.5f)]
-    [ModOption("Gravity Force Compensation", "Force multiplier when throwing a Gravity-imbued blade using Slingblade",
-        defaultValueIndex = 5)]
-    public static float gravityForceCompensation = 3.5f;
+    [SkillCategory("Slingblade", Category.Base, 1, 0)]
+    [ModOptionSlider, ModOptionFloatValuesDefault(1, 5, 0.5f, 3.5f)]
+    [ModOption("Gravity Force Compensation", "Force multiplier when throwing a Gravity-imbued blade using Slingblade")]
+    public static float gravityForceCompensation;
 
-    public static bool freeCharge;
     public static bool aimAssist = false;
+    public bool stealIfNearby;
 
     protected AnimationCurve rotationCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
     protected bool readyHaptic = false;
@@ -117,35 +114,22 @@ public class SpellCastSlingblade : SpellCastCharge {
     public Quiver quiver;
 
     public Transform anchor;
+    private Blade lastThrownBlade;
+
+    private BoolHandler imbueDisabled;
 
     public override void OnCatalogRefresh() {
         base.OnCatalogRefresh();
         Blade.itemData = Catalog.GetData<ItemData>(itemId);
         handleData = Catalog.GetData<HandleData>(handleId);
         ModOptions.Setup();
-        var soldier = Catalog.GetData<ContainerData>("SoldierAllemande");
-        Debug.Log("LOGGING STUFF");
-        foreach (var content in soldier.containerContents) {
-            switch (content) {
-                case SpellContent spell:
-                    Debug.Log($"{spell.referenceID}: {Catalog.GetData<SpellData>(spell.referenceID)}");
-                    break;
-                case ItemContent item:
-                    Debug.Log($"{item.referenceID}: {Catalog.GetData<ItemData>(item.referenceID)}");
-                    break;
-                case TableContent table:
-                    Debug.Log($"{table.referenceID}: {Catalog.GetData<LootTable>(table.referenceID)}");
-                    break;
-                case SkillContent skill:
-                    Debug.Log($"{skill.referenceID}: {Catalog.GetData<SkillData>(skill.referenceID)}");
-                    break;
-            }
-        }
     }
 
     public override void Load(SpellCaster spellCaster) {
         base.Load(spellCaster);
 
+        imbueDisabled = new BoolHandler(false);
+        imbueDisabled.OnChangeEvent += OnImbueDisabled;
         anchor = new GameObject().transform;
         anchor.transform.SetParent(spellCaster.ragdollHand.transform);
         anchor.transform.SetPositionAndRotation(spellCaster.ragdollHand.transform.position,
@@ -156,7 +140,10 @@ public class SpellCastSlingblade : SpellCastCharge {
             handle = obj.AddComponent<Handle>();
             handle.physicBody.isKinematic = true;
             handle.Load(handleData);
-            handle.data.highlightDefaultTitle = "Slicer";
+            handle.data.localizationId = "ThisCanBeAnythingForSomeReason";
+            handle.data.highlightDefaultTitle = "Slingshot";
+            handle.data.highlightDefaultTitle = "Slingshot";
+            handle.handOverlapColliders = new List<Collider>();
             handle.SetTouch(false);
             handleActive = false;
             handle.allowedHandSide
@@ -169,6 +156,10 @@ public class SpellCastSlingblade : SpellCastCharge {
         OnQuiverLoadEvent?.Invoke(this, quiver);
         root = Step.Start();
         SetupModifiers();
+    }
+
+    private void OnImbueDisabled(bool oldValue, bool newValue) {
+        imbueEnabled = !newValue;
     }
 
     protected void OnHandleGrab(RagdollHand hand, Handle handle, EventTime time) {
@@ -189,6 +180,7 @@ public class SpellCastSlingblade : SpellCastCharge {
     public override void Unload() {
         base.Unload();
 
+        if (spellCaster == null) return;
         if (!spellCaster.ragdollHand.ragdoll.creature.isPlayer) {
             spellCaster.ragdollHand.ragdoll.forcePhysic.Remove(this);
         }
@@ -198,20 +190,41 @@ public class SpellCastSlingblade : SpellCastCharge {
         handle = null;
     }
 
+    public bool FreeCharge {
+        get => spellCaster
+               && spellCaster.ragdollHand.creature.TryGetVariable(SkillLethalReturn.FreeCharge,
+                   out bool freeCharge)
+               && freeCharge;
+        set => spellCaster.ragdollHand.creature.SetVariable(SkillLethalReturn.FreeCharge, value);
+    }
+
     public override void Fire(bool active) {
         if (active && spellCaster.ragdollHand.grabbedHandle) return;
         base.Fire(active);
         if (active) {
-            bool wasFreeCharge = freeCharge;
-            if (freeCharge) {
-                freeCharge = false;
+            bool wasFreeCharge = FreeCharge;
+            if (FreeCharge) {
+                FreeCharge = false;
                 AddModifier(this, Modifier.ChargeSpeed, 100);
             }
 
             if (quiver.Count > 0)
                 AddModifier(this, Modifier.ChargeSpeed, 20);
+            lastThrownBlade?.StopGuidance();
+            lastThrownBlade = null;
             readyHaptic = false;
-            Blade.Spawn(OnBladeSpawn, HandPosition, HandRotation, spellCaster.mana.creature, !Quiver.Get(spellCaster.mana.creature).IsFull && wasFreeCharge);
+            if (stealIfNearby
+                && Blade.TryGetClosestSlungInRadius(spellCaster.magicSource.position, SkillKnifethief.grabRadius,
+                    out var closest, quiver)) {
+                closest.item.StopFlying();
+                closest.item.StopThrowing();
+                closest.isDangerous.Remove(Blade.UntilHit);
+                currentCharge = 1;
+                OnBladeSpawn(closest, false);
+            } else {
+                Blade.Spawn(OnBladeSpawn, HandPosition, HandRotation, spellCaster.mana.creature,
+                    !Quiver.Get(spellCaster.mana.creature).IsFull && wasFreeCharge);
+            }
         } else {
             root.Reset();
             OnCastStop();
@@ -229,6 +242,7 @@ public class SpellCastSlingblade : SpellCastCharge {
     }
 
     public void DismissActiveBlade(bool skipQuiver = false) {
+        // imbueDisabled.Remove(this);
         if (activeBlade != null) {
             activeBlade.transform.localScale = Vector3.one;
         }
@@ -317,10 +331,15 @@ public class SpellCastSlingblade : SpellCastCharge {
     }
 
     public void OnBladeSpawn(Blade blade, bool isNew) {
+        if (!isNew)
+            currentCharge = 1;
+        // imbueDisabled.Add(this);
         activeBlade = blade;
         blade.SetTouch(false);
-        blade.OnlyIgnoreRagdoll(spellCaster.mana.creature.ragdoll);
-        blade.quiver = quiver;
+        blade.OnlyIgnoreRagdoll(spellCaster.mana.creature.ragdoll, true);
+        blade.item.RefreshCollision();
+        blade.Quiver = quiver;
+        blade.item.lastHandler = spellCaster.ragdollHand;
 
         if (isNew) {
             activeBlade.transform.localScale = Vector3.zero;
@@ -333,6 +352,18 @@ public class SpellCastSlingblade : SpellCastCharge {
             .Parent(spellCaster.magicSource)
             .AtWorld(HandPosition, HandRotation));
         OnBladeSpawnEvent?.Invoke(this, blade);
+    }
+
+    // IMBUE
+    public override void Load(Imbue imbue) {
+        base.Load(imbue);
+        if (imbue.colliderGroup.collisionHandler?.item is not Item item) return;
+        if (item.gameObject.GetComponent<Blade>() != null) return;
+        var blade = item.gameObject.AddComponent<Blade>();
+        blade.Quiver = quiver;
+        blade.canFullDespawn = false;
+        blade.AllowDespawn(true);
+        if (blade.item.mainHandler == null) blade.RunAfter(() => blade.StartDespawn(), 0);
     }
 
     public override void Throw(Vector3 velocity) {
@@ -355,16 +386,18 @@ public class SpellCastSlingblade : SpellCastCharge {
 
         spellCaster.ragdollHand.playerHand?.controlHand.HapticPlayClip(Catalog.gameData.haptics.bowShoot);
 
-        activeBlade.OnlyIgnoreRagdoll(spellCaster.mana.creature.ragdoll);
+        activeBlade.OnlyIgnoreRagdoll(spellCaster.mana.creature.ragdoll, true);
         activeBlade.AddForce(velocity * throwForce, ForceMode.VelocityChange, aimAssist, true, spellCaster.ragdollHand);
         activeBlade.item.lastHandler = spellCaster.ragdollHand;
         activeBlade.wasSlung = true;
         Blade.slung.Add(activeBlade);
+        lastThrownBlade = activeBlade;
         activeBlade.isDangerous.Add(Blade.UntilHit);
         activeBlade.OnSlingEndEvent -= OnSlingEnd;
         activeBlade.OnSlingEndEvent += OnSlingEnd;
         activeBlade.OnHitEntityEvent -= OnHit;
         activeBlade.OnHitEntityEvent += OnHit;
+        activeBlade.StopGuidance();
         try {
             OnBladeThrowEvent?.Invoke(this, velocity, activeBlade);
         } catch (Exception e) {
@@ -395,5 +428,6 @@ public enum Mode {
     Crown,
     Slicer,
     Rain,
-    Blender
+    Blender,
+    Volley
 }

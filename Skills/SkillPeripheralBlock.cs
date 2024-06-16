@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using ThunderRoad;
+using ThunderRoad.DebugViz;
 using ThunderRoad.Skill;
 using ThunderRoad.Skill.Spell;
 using UnityEngine;
@@ -71,7 +72,6 @@ public class SkillPeripheralBlock : SkillData {
         var startRay = new Ray(item.transform.position, item.Velocity.normalized);
         var startPlane = new Plane(item.Velocity,
             creature.ragdoll.targetPart.transform.position - item.Velocity.normalized * 0.5f);
-        if (item.GetComponent<Electromagnet>() is Electromagnet magnet) Debug.Log($"Found magnet! Targeting {magnet.target}");
 
         startPlane.Raycast(startRay, out float startEnter);
         var direction

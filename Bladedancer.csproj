@@ -56,12 +56,17 @@
     </ItemGroup>
     <ItemGroup>
         <Compile Include="Blade.cs" />
+        <Compile Include="ItemModuleTwinBlade.cs" />
         <Compile Include="Misc.cs" />
         <Compile Include="Misc\HasAnySpell.cs" />
+        <Compile Include="Misc\SpellBladeMergeData.cs" />
         <Compile Include="ModOptions.cs" />
         <Compile Include="PID.cs" />
         <Compile Include="Quiver.cs" />
         <Compile Include="SequenceTracker.cs" />
+        <Compile Include="Skills\SkillFiresGuidance.cs" />
+        <Compile Include="Skills\SkillKnifethief.cs" />
+        <Compile Include="Skills\SkillStormVolley.cs" />
         <Compile Include="Skills\SkillBladelock.cs" />
         <Compile Include="Skills\SkillAimAssist.cs" />
         <Compile Include="Skills\SkillBladePunch.cs" />
@@ -78,6 +83,8 @@
         <Compile Include="Skills\SkillRotarySlingshot.cs" />
         <Compile Include="Skills\SkillSeekerTwin.cs" />
         <Compile Include="Skills\SkillStartWithFullCrown.cs" />
+        <Compile Include="Skills\SkillTwinBladeMaestro.cs" />
+        <Compile Include="Skills\SkillVersatility.cs" />
         <Compile Include="Skills\SkillVortexBlender.cs" />
         <Compile Include="SpellCastSlingblade.cs" />
         <Compile Include="Properties\AssemblyInfo.cs"/>

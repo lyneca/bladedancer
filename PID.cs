@@ -54,17 +54,19 @@ public class RBPID {
     public PID velocityPID;
     public PID headingPID;
     public Rigidbody rb;
+    public Vector3 anchor;
 
     private ForceMode forceMode;
 
     public bool isActive;
     private float maxForce;
 
-    public RBPID(Rigidbody rigidbody, float p = 1, float i = 0, float d = 0.3f, ForceMode forceMode = ForceMode.Force, float maxForce = 100) {
+    public RBPID(Rigidbody rigidbody, float p = 1, float i = 0, float d = 0.3f, ForceMode forceMode = ForceMode.Force, float maxForce = 100, Vector3 anchor = default) {
         rb = rigidbody;
         isActive = true;
         this.maxForce = maxForce;
         this.forceMode = forceMode;
+        this.anchor = anchor;
         velocityPID = new PID(p, i, d);
         headingPID = new PID(p, i, d);
     }
@@ -79,6 +81,10 @@ public class RBPID {
         return this;
     }
 
+    public void SetAnchor(Vector3 anchor) {
+        this.anchor = anchor;
+    }
+
     public void Update(Vector3 targetPos, Quaternion targetRot, float forceMult = 1) {
         if (!isActive)
             return;
@@ -90,7 +96,7 @@ public class RBPID {
         if (!isActive)
             return;
         if (Time.deltaTime == 0 || Time.deltaTime == float.NaN) return;
-        var force = velocityPID.Update(targetPos - rb.transform.position, Time.deltaTime) * forceMult;
+        var force = velocityPID.Update(targetPos - rb.transform.TransformPoint(anchor), Time.deltaTime) * forceMult;
         rb.AddForce(force.ClampMagnitude(0, maxForce), forceMode);
     }
 

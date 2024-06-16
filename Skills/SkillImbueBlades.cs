@@ -23,8 +23,11 @@ public class SkillImbueBlades : AISkillData {
         if (random) {
             Catalog.GetDataList<SpellCastCharge>()
                 .RandomFilteredSelectInPlace(
-                    each => each.imbueEnabled && each.showInTree && each.allowSkill && !each.hideInSkillMenu,
-                    out spell);
+                    each => each.imbueEnabled
+                            && each.showInTree
+                            && each.allowSkill
+                            && !each.hideInSkillMenu
+                            && each is not SpellCastSlingblade, out spell);
         }
 
         spell.spellCaster = creature.handRight.caster;

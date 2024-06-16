@@ -89,6 +89,6 @@ public class SkillBladelock : SpellSkillData {
     }
 
     public void OnBladeThrow(SpellCastSlingblade spell, Vector3 velocity, Blade blade) {
-        if (target != null) blade.HomeTo(target);
+        if (target != null) blade.HomeTo(target, target.ragdoll.headPart.transform);
     }
 }

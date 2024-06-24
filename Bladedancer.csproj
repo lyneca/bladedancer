@@ -50,11 +50,23 @@
         <Reference Include="UnityEngine.CoreModule">
           <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
         </Reference>
+        <Reference Include="UnityEngine.ParticleSystemModule">
+          <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.ParticleSystemModule.dll</HintPath>
+        </Reference>
         <Reference Include="UnityEngine.PhysicsModule">
           <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
         </Reference>
+        <Reference Include="UnityEngine.VideoModule">
+          <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.VideoModule.dll</HintPath>
+        </Reference>
     </ItemGroup>
     <ItemGroup>
+        <Compile Include="Golem\GolemBladeAbility.cs" />
+        <Compile Include="Golem\GolemBladeRain.cs" />
+        <Compile Include="Golem\GolemBladeStorm.cs" />
+        <Compile Include="Golem\GolemAbilityLoader.cs" />
+        <Compile Include="Misc\CustomLoreAdder.cs" />
+        <Compile Include="SecretSpawner.cs" />
         <Compile Include="Blade.cs" />
         <Compile Include="ItemModuleTwinBlade.cs" />
         <Compile Include="Misc.cs" />
@@ -64,6 +76,10 @@
         <Compile Include="PID.cs" />
         <Compile Include="Quiver.cs" />
         <Compile Include="SequenceTracker.cs" />
+        <Compile Include="Skills\NPC\SkillImbueBlades.cs" />
+        <Compile Include="Skills\NPC\SkillStartWithFullCrown.cs" />
+        <Compile Include="Skills\SkillArchersGavotte.cs" />
+        <Compile Include="Skills\SkillArcOfDaeKvir.cs" />
         <Compile Include="Skills\SkillFiresGuidance.cs" />
         <Compile Include="Skills\SkillKnifethief.cs" />
         <Compile Include="Skills\SkillStormVolley.cs" />
@@ -77,12 +93,10 @@
         <Compile Include="Skills\SkillDoubleTrouble.cs" />
         <Compile Include="Skills\SkillForceBlades.cs" />
         <Compile Include="Skills\SkillGoreTalons.cs" />
-        <Compile Include="Skills\SkillImbueBlades.cs" />
         <Compile Include="Skills\SkillLethalReturn.cs" />
         <Compile Include="Skills\SkillPeripheralBlock.cs" />
         <Compile Include="Skills\SkillRotarySlingshot.cs" />
         <Compile Include="Skills\SkillSeekerTwin.cs" />
-        <Compile Include="Skills\SkillStartWithFullCrown.cs" />
         <Compile Include="Skills\SkillTwinBladeMaestro.cs" />
         <Compile Include="Skills\SkillVersatility.cs" />
         <Compile Include="Skills\SkillVortexBlender.cs" />

@@ -54,6 +54,9 @@ public class Quiver : ThunderBehaviour {
     }
 
     public static Quiver Get(Creature creature) => creature ? creature.GetOrAddComponent<Quiver>() : null;
+    
+    public delegate void BladeThrow(Quiver quiver, Blade blade);
+    public event BladeThrow OnBladeThrow;
 
     public delegate void CountChangeEvent(Quiver quiver);
     public event CountChangeEvent OnCountChangeEvent;
@@ -128,15 +131,17 @@ public class Quiver : ThunderBehaviour {
 
     public void Despawn(EventTime time) {
         if (time != EventTime.OnStart) return;
-        ForAllQuiver(blade => blade.Release());
+        DumpAll();
         Destroy(this);
     }
 
-    [FormerlySerializedAs("quiver")] public List<Blade> blades = new();
+    public List<Blade> blades = new();
     private bool isUnconscious;
     private bool isIncapacitated;
 
-    public void ForAllQuiver(Action<Blade> action) {
+    public void InvokeBladeThrow(Blade blade) => OnBladeThrow?.Invoke(this, blade);
+
+    public void ForAllBlades(Action<Blade> action) {
         foreach (var blade in new List<Blade>(blades)) {
             action?.Invoke(blade);
         }
@@ -150,7 +155,7 @@ public class Quiver : ThunderBehaviour {
             for (int i = Blade.all.Count - 1; i >= 0; i--) {
                 if (Blade.all[i] is { MoveTarget: null, IsFree: true } blade) {
                     if ((blade.transform.position - transform.position).sqrMagnitude > radius * radius) continue;
-                    blade.ReturnToQuiver(this, true);
+                    blade.ReturnToQuiver(this);
                 }
 
                 if (IsFull) return;
@@ -164,13 +169,18 @@ public class Quiver : ThunderBehaviour {
                 }
 
                 if ((blade.transform.position - transform.position).sqrMagnitude > radius * radius) continue;
-                blade.ReturnToQuiver(this, true, true);
+                blade.ReturnToQuiver(this, true);
             }
         }
     }
 
     public bool AddToQuiver(Blade blade, bool randomIndex = false) {
-        if (!blade || blade == null || IsFull || blades.Contains(blade)) return false;
+        if (!blade
+            || blade == null
+            || IsFull
+            || blades.Contains(blade)
+            || !creature.TryGetVariable(SkillCrownOfKnives.HasCrown, out bool hasCrown)
+            || !hasCrown) return false;
         if (randomIndex)
             blades.Insert(Random.Range(0, blades.Count), blade);
         else
@@ -179,12 +189,12 @@ public class Quiver : ThunderBehaviour {
             blade.IgnoreBlades(blades);
         }
         blade.Quiver = this;
+        blade.OnAddToQuiver(this);
         blade.AllowDespawn(false);
         blade.SetTouch(false);
         blade.item.StopFlying();
         blade.item.StopThrowing();
         blade.StopGuidance();
-        blade.SetMoltenArc(false);
         
         if (blade.item.isPenetrating) {
             foreach (var handler in blade.item.mainCollisionHandler.penetratedObjects) {
@@ -228,7 +238,7 @@ public class Quiver : ThunderBehaviour {
         if (inventory)
             blade.IgnoreItem(inventory);
         
-        blade.SetMoltenArc(true);
+        blade.OnRemoveFromQuiver(this);
         blade.ScaleInstantly(ScaleMode.FullSize);
 
         if (!blades.Remove(blade)) return false;
@@ -237,6 +247,21 @@ public class Quiver : ThunderBehaviour {
             RefreshQuiver(true);
         OnBladeRemovedEvent?.Invoke(this, blade);
         return true;
+    }
+
+    public void DumpAll() {
+        for (var i = blades.Count - 1; i >= 0; i--) {
+            var blade = blades[i];
+            RemoveFromQuiver(blade, false);
+            blade.Release();
+        }
+        RefreshQuiver();
+    }
+
+    public void Fill() {
+        while (blades.Count < Max)
+            Blade.Spawn((blade, _) => blade.ReturnToQuiver(this), creature.ragdoll.headPart.transform.position,
+                Quaternion.LookRotation(Vector3.up), creature, true);
     }
 
     public void ImbueOverTime(SpellCastCharge spell, float ratio) {
@@ -268,18 +293,46 @@ public class Quiver : ThunderBehaviour {
         }
     }
 
-    public bool TryGetBlade(out Blade blade, bool refresh = true) {
+    public bool TryGetBlade(out Blade blade, bool refresh = true, ItemData.Type? preferredType = null) {
+        List<Blade> bladesToCheck = null;
+
+        if (preferredType != null) {
+            bladesToCheck = new List<Blade>();
+            for (var i = 0; i < blades.Count; i++) {
+                if (blades[i].item.data.type == preferredType) {
+                    bladesToCheck.Add(blades[i]);
+                }
+            }
+        }
+
+        if (bladesToCheck is null or { Count: 0 })
+            bladesToCheck = blades;
+        
         blade = null;
-        if (blades.Count == 0) return false;
-        blade = blades[blades.Count - 1];
+        if (bladesToCheck.Count == 0) return false;
+        blade = bladesToCheck[blades.Count - 1];
         return RemoveFromQuiver(blade, refresh);
     }
 
-    public bool TryGetClosestBlade(Vector3 position, out Blade blade) {
+    public bool TryGetClosestBlade(Vector3 position, out Blade blade, ItemData.Type? preferredType = null) {
         float distance = Mathf.Infinity;
+        List<Blade> bladesToCheck = null;
+
+        if (preferredType != null) {
+            bladesToCheck = new List<Blade>();
+            for (var i = 0; i < blades.Count; i++) {
+                if (blades[i].item.data.type == preferredType) {
+                    bladesToCheck.Add(blades[i]);
+                }
+            }
+        }
+
+        if (bladesToCheck is null or { Count: 0 })
+            bladesToCheck = blades;
+        
         blade = null;
-        for (var i = 0; i < blades.Count; i++) {
-            var thisBlade = blades[i];
+        for (var i = 0; i < bladesToCheck.Count; i++) {
+            var thisBlade = bladesToCheck[i];
             float thisDistance = (thisBlade.transform.position - position).sqrMagnitude;
             if (!(thisDistance < distance)) continue;
             distance = thisDistance;
@@ -311,6 +364,12 @@ public class Quiver : ThunderBehaviour {
     }
 
     public void RefreshQuiver(bool changed = false) {
+
+        // Fix broken daggers
+        for (int i = blades.Count - 1; i >= 0; i--) {
+            var blade = blades[i];
+            if (blade == null || !blade.IsValid) blade.Despawn();
+        }
         while (IsFull && Count > Max && Max >= 0) {
             if (TryGetBlade(out var blade, false)) {
                 blade.Release();
@@ -318,12 +377,6 @@ public class Quiver : ThunderBehaviour {
             } else {
                 break;
             }
-        }
-
-        // Fix broken daggers
-        for (int i = blades.Count - 1; i >= 0; i--) {
-            var blade = blades[i];
-            if (blade == null || !blade.IsValid) blade.Despawn();
         }
 
         var newQuiver = new List<Blade>();
@@ -431,12 +484,23 @@ public class Quiver : ThunderBehaviour {
                     .LookAt(target, true, Vector3.forward);
             case Mode.Volley:
                 TrianglePos(i, out int row, out int col, out int width);
-                float x = (col - (width - 1) / 2f) * SkillStormVolley.size;
-                float y = row * SkillStormVolley.height;
+                float xPos = (col - (width - 1) / 2f) * SkillStormVolley.size;
+                float yPos = row * SkillStormVolley.height;
                 return new MoveTarget(MoveMode.PID, 6)
                     .Parent(target)
                     .Scale(ScaleMode.FullSize)
-                    .At(Vector3.forward * y + Vector3.right * x, Quaternion.LookRotation(Vector3.down, Vector3.forward));
+                    .At(Vector3.forward * yPos + Vector3.right * xPos, Quaternion.LookRotation(Vector3.down, Vector3.forward));
+            case Mode.VolleySpraying:
+                int split = i / 2;
+                float side = i % 2 * 2 - 1;
+                TrianglePos(split, out int rowSplit, out int colSplit, out int widthSplit);
+                float xSplit = (colSplit - (widthSplit - 1) / 2f) * SkillStormVolley.size * SkillStormVolley.spraySpreadMult;
+                float ySplit = rowSplit * SkillStormVolley.height * SkillStormVolley.spraySpreadMult + SkillStormVolley.sprayDistanceFromPlayer;
+                return new MoveTarget(MoveMode.PID, 6)
+                    .Parent(target)
+                    .Scale(ScaleMode.Scaled)
+                    .At(Vector3.right * (ySplit * side) + Vector3.up * xSplit + Vector3.forward * 0.5f,
+                        Quaternion.LookRotation(Vector3.forward));
         }
 
         return default;

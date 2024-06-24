@@ -65,7 +65,7 @@ public class SkillPeripheralBlock : SkillData {
         if (trackedItems.ContainsKey(item) || Quiver.Get(creature).preventBlock) return;
         if (SkillDiscombobulate.CreatureStunned(creature)) return;
         if (!Quiver.TryGet(creature, out var quiver)
-            || !quiver.TryGetClosestBlade(item.transform.position, out var blade)) return;
+            || !quiver.TryGetClosestBlade(item.transform.position, out var blade, ItemData.Type.Shield)) return;
         trackedItems[item] = blade;
         var startPos = blade.transform.position;
         var startRot = blade.transform.rotation;
@@ -79,7 +79,7 @@ public class SkillPeripheralBlock : SkillData {
                                                                               - blade.transform.position);
         blade.item.mainCollisionHandler.OnCollisionStartEvent -= OnCollision;
         blade.item.mainCollisionHandler.OnCollisionStartEvent += OnCollision;
-        blade.MoveTo(new MoveTarget(MoveMode.Joint)
+        blade.MoveTo(new MoveTarget(MoveMode.Joint, 0)
             .At(() => {
                 var ray = new Ray(item.transform.position, item.Velocity.normalized);
                 var plane = new Plane(item.Velocity,

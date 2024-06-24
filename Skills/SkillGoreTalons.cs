@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using ThunderRoad;
 using ThunderRoad.Skill.Spell;
@@ -20,7 +21,7 @@ public class SkillGoreTalons : SkillSpellPunch {
     public static bool allowClimbing = true;
 
     [SkillCategory("Gore Talons", Category.Base | Category.Body, 1), ModOptionOrder(1)]
-    [ModOptionFloatValuesDefault(0.05f, 0.3f, 0.05f, 0.1f)]
+    [ModOptionFloatValuesDefault(0.05f, 0.3f, 0.05f, 0.15f)]
     [ModOptionSlider, ModOption("Talon Distance", "How far away talons lie from your hand.")]
     public static float talonDistance;
 
@@ -35,7 +36,7 @@ public class SkillGoreTalons : SkillSpellPunch {
     public static float talonAngle;
 
     [SkillCategory("Gore Talons", Category.Base | Category.Body, 1), ModOptionOrder(2)]
-    [ModOptionSlider, ModOptionFloatValuesDefault(0, 30, 5, 30)]
+    [ModOptionSlider, ModOptionFloatValuesDefault(0, 30, 5, 0)]
     [ModOption("Talon Speed",
         "How fast the talons match your hand movement; higher is faster. Set to 0 for instant. Does nothing when climbing is enabled.")]
     public static float talonSpeed;
@@ -90,7 +91,13 @@ public class SkillGoreTalons : SkillSpellPunch {
 
     public override void OnFist(PlayerHand hand, bool gripping) {
         base.OnFist(hand, gripping);
-        if (!Quiver.TryGet(hand.ragdollHand?.creature, out var quiver)) return;
+        hand.StartCoroutine(OnFistRoutine(hand, gripping));
+    }
+
+    public IEnumerator OnFistRoutine(PlayerHand hand, bool gripping) {
+        yield return new WaitForEndOfFrame();
+        if (hand.ragdollHand.grabbedHandle != null) yield break;
+        if (!Quiver.TryGet(hand.ragdollHand?.creature, out var quiver)) yield break;
         Player.currentCreature.SetVariable(TalonActive + hand.side, gripping);
 
         Refresh(hand.side);
@@ -129,8 +136,8 @@ public class SkillGoreTalons : SkillSpellPunch {
 
         for (var i = 0; i < talons.Count; i++) {
             if (!talons[i]) continue;
-            talons[i].OnPenetrateEvent -= OnPenetrate;
-            talons[i].OnUnPenetrateEvent -= OnPenetrate;
+            talons[i].OnPenetrate -= OnPenetrate;
+            talons[i].OnUnPenetrate -= OnPenetrate;
             talons[i].isDangerous.Remove(this);
             talons[i].CancelMovement(true);
             talons[i].DespawnOrReturn(Quiver.Main);
@@ -159,15 +166,11 @@ public class SkillGoreTalons : SkillSpellPunch {
                 .Parent(hand.ragdollHand.transform)
                 .At(position, Quaternion.LookRotation(pointDir, position));
 
-            if (allowClimbing)
-                moveTarget = moveTarget.JointTo(hand.ragdollHand.physicBody, JointType.Config, talonMassScale,
-                    talonSpring, talonDamper, talonMaxForce);
-
             blade.MoveTo(moveTarget);
-            blade.OnPenetrateEvent -= OnPenetrate;
-            blade.OnPenetrateEvent += OnPenetrate;
-            blade.OnUnPenetrateEvent -= OnPenetrate;
-            blade.OnUnPenetrateEvent += OnPenetrate;
+            blade.OnPenetrate -= OnPenetrate;
+            blade.OnPenetrate += OnPenetrate;
+            blade.OnUnPenetrate -= OnPenetrate;
+            blade.OnUnPenetrate += OnPenetrate;
             talons.Add(blade);
         }
 
@@ -175,8 +178,7 @@ public class SkillGoreTalons : SkillSpellPunch {
     }
 
     private void OnPenetrate(Blade blade, CollisionInstance hit, Damager damager) {
-        Debug.Log("OnPenetrate called");
-        if (blade.MoveTarget?.parent?.GetComponent<RagdollHand>() is RagdollHand hand)
+        if (blade.MoveTarget?.parent?.GetComponent<RagdollHand>() is RagdollHand hand && allowClimbing)
             RefreshClimb(hand);
     }
 
@@ -187,38 +189,54 @@ public class SkillGoreTalons : SkillSpellPunch {
             return;
         }
 
-        if (Player.currentCreature.TryGetVariable(TalonList + hand.side, out List<Blade> talons)) return;
+        if (!Player.currentCreature.TryGetVariable(TalonList + hand.side, out List<Blade> talons)) return;
         bool wasPenetratingTerrain = hand.climb.isGripping;
         var isPenetratingTerrain = false;
         for (var i = 0; i < talons.Count; i++) {
             var talon = talons[i];
-            if (!talon.item.isPenetrating) continue;
+            var talonIsPenetratingTerrain = false;
+            if (talon.item.isPenetrating) {
+                for (var j = 0; j < talon.item.mainCollisionHandler.collisions.Length; j++) {
+                    var collision = talon.item.mainCollisionHandler.collisions[j];
+                    if (collision.damageStruct.penetration == DamageStruct.Penetration.None
+                        || (collision.targetColliderGroup != null
+                            && collision.targetColliderGroup?.collisionHandler is not
+                                { physicBody.isKinematic: true })) continue;
 
-            for (var j = 0; j < talon.item.mainCollisionHandler.collisions.Length; j++) {
-                var collision = talon.item.mainCollisionHandler.collisions[j];
-                if (collision.damageStruct.penetration == DamageStruct.Penetration.None
-                    || (collision.targetColliderGroup != null
-                        && collision.targetColliderGroup?.collisionHandler is not
-                            { physicBody.isKinematic: true })) continue;
-
-                isPenetratingTerrain = true;
-                break;
+                    talonIsPenetratingTerrain = true;
+                    isPenetratingTerrain = true;
+                    break;
+                }
             }
+
+            if (talonIsPenetratingTerrain) {
+                if (talon.MoveTarget is not MoveTarget target) continue;
+                talon.MoveTarget = target.JointTo(hand.physicBody.rigidBody, JointType.Config, talonMassScale,
+                    talonSpring, talonDamper, talonMaxForce);
+                talon.ForceRefreshMoveTarget();
+            } else {
+                if (talon.MoveTarget is not MoveTarget target) continue;
+                talon.MoveTarget = target.JointTo(null);
+                talon.ForceRefreshMoveTarget();
+            }
+
         }
 
-        if (hand.climb.gripNode != null || isPenetratingTerrain == wasPenetratingTerrain) return;
-        if (isPenetratingTerrain) {
-            hand.climb.isGripping = true;
-            var obj = new GameObject("TEMP").AddComponent<Rigidbody>();
-            obj.isKinematic = true;
-            hand.climb.gripPhysicBody = new PhysicBody(obj);
-            hand.ragdoll.creature.currentLocomotion.Jump(true);
-        } else {
-            if (hand.climb.gripPhysicBody && hand.climb.gripPhysicBody.gameObject.name == "TEMP")
-                Object.Destroy(hand.climb.gripPhysicBody.gameObject);
-            hand.climb.gripPhysicBody = null;
-            hand.climb.isGripping = false;
-        }
+        // if (hand.climb.gripNode != null || isPenetratingTerrain == wasPenetratingTerrain) return;
+        // if (isPenetratingTerrain) {
+        //     hand.climb.isGripping = true;
+        //     var obj = new GameObject("TEMP").AddComponent<Rigidbody>();
+        //     obj.isKinematic = true;
+        //     hand.climb.gripPhysicBody = new PhysicBody(obj);
+        //     hand.ragdoll.creature.currentLocomotion.Jump(true);
+        // } else {
+        //     if (hand.climb.gripPhysicBody && hand.climb.gripPhysicBody.gameObject.name == "TEMP")
+        //         Object.Destroy(hand.climb.gripPhysicBody.gameObject);
+        //     hand.climb.gripPhysicBody = null;
+        //     hand.climb.isGripping = false;
+        //     for (var i = 0; i < talons.Count; i++) {
+        //     }
+        // }
     }
 
     public void Refresh() {

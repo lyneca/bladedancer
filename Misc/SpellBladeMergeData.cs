@@ -101,7 +101,7 @@ public class SpellBladeMergeData : SpellMergeData {
             mana.casterLeft.ragdollHand.HapticTick();
             mana.casterRight.ragdollHand.HapticTick();
             Blade.Spawn((spawnedBlade, _) => {
-                spawnedBlade.ReturnToQuiver(quiver, true);
+                spawnedBlade.ReturnToQuiver(quiver);
                 OnBladeSpawn(quiver, spawnedBlade);
             }, mana.mergePoint.position, SpawnOrientation, mana.creature, true);
         }

@@ -6,9 +6,39 @@ using UnityEngine;
 namespace Bladedancer;
 
 public class ItemModuleTwinBlade : ItemModule {
+    public string skillId;
+    public string effectId;
+    public static SkillData skillData;
+    public static EffectData effectData;
+
+    public override void OnItemDataRefresh(ItemData data) {
+        base.OnItemDataRefresh(data);
+        skillData = Catalog.GetData<SkillData>(skillId);
+        effectData = Catalog.GetData<EffectData>(effectId);
+    }
+
     public override void OnItemLoaded(Item item) {
         base.OnItemLoaded(item);
         item.gameObject.AddComponent<TwinBladeBehaviour>();
+    }
+}
+
+public class ItemModuleTeacherBlade : ItemModule {
+    public override void OnItemLoaded(Item item) {
+        base.OnItemLoaded(item);
+        item.OnGrabEvent += OnItemGrabbed;
+    }
+
+    private void OnItemGrabbed(Handle handle, RagdollHand hand) {
+        item.OnGrabEvent -= OnItemGrabbed;
+        if (ItemModuleTwinBlade.skillData == null || hand.creature.container.HasSkillContent(ItemModuleTwinBlade.skillData)) return;
+        item.SetOwner(Item.Owner.Player);
+        ItemModuleTwinBlade.effectData?.Spawn(hand.transform).Play();
+        Player.local.creature.container.AddDataContent(ItemModuleTwinBlade.skillData);
+        Player.characterData.inventory.ClearPlayerInventory(true);
+        Player.characterData.inventory.SetPlayerInventory(Player.local.creature.container.CloneContents());
+        Player.characterData.SaveAsync();
+        DisplayMessage.instance.ShowMessage(new DisplayMessage.MessageData(ItemModuleTwinBlade.skillData.description, 0));
     }
 }
 
@@ -17,6 +47,7 @@ public class TwinBladeBehaviour : ThunderBehaviour {
     public Blade[] heldBlades;
     public Dictionary<ColliderGroup, Damager> damagers;
     public ColliderGroup[] colliderGroups;
+
     private void Awake() {
         item = GetComponent<Item>();
         item.OnHeldActionEvent += OnHeldAction;
@@ -155,9 +186,9 @@ public class TwinBladeBehaviour : ThunderBehaviour {
         heldBlades[index].Release(true, 0.5f);
         heldBlades[index].AddForce(velocity * SkillTwinBladeMaestro.throwMult, ForceMode.VelocityChange);
 
-        if (Creature.AimAssist(GetTargetPos(index), velocity, 30, 30, out var target, Filter.LiveNPCs,
-                CreatureType.Golem | CreatureType.Human) is Creature creature) {
-            heldBlades[index].HomeTo(creature, target);
+        if (Creature.AimAssist(GetTargetPos(index), velocity, 30, 30, out var target, Filter.EnemyOf(Player.currentCreature),
+                CreatureType.Golem | CreatureType.Human) is ThunderEntity entity) {
+            heldBlades[index].HomeTo(entity, target);
         }
         
         heldBlades[index] = null;

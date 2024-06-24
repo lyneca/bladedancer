@@ -1,6 +1,7 @@
-﻿using System;
+﻿#define BLADEDANCER
+
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using Bladedancer.Skills;
 using SequenceTracker;
 using ThunderRoad;
@@ -27,7 +28,7 @@ public class SpellCastSlingblade : SpellCastCharge {
     public static float jointSpring;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValuesDefault(5, 50, 5, 10)]
+    [ModOptionSlider, ModOptionFloatValuesDefault(0, 10, 0.5f, 1)]
     [ModOption("Joint Damper", "Joint spring damper")]
     public static float jointDamper;
 
@@ -51,6 +52,11 @@ public class SpellCastSlingblade : SpellCastCharge {
     [ModOptionSlider, ModOptionFloatValuesDefault(50, 300, 50, 100)]
     [ModOption("PID Max Force", "PID Max Force")]
     public static float pidMaxForce;
+
+    [SkillCategory("General")]
+    [ModOptionSlider, ModOptionFloatValuesDefault(0, 10, 1, 3)]
+    [ModOption("PID Damping", "PID Damping")]
+    public static float pidDamping;
 
     [SkillCategory("General")]
     [ModOptionSlider, ModOptionFloatValuesDefault(0, 5, 1, 3)]
@@ -80,7 +86,6 @@ public class SpellCastSlingblade : SpellCastCharge {
 
     public Blade activeBlade;
 
-    public bool quiverEnabled = false;
     public static float intangibleThreshold = 3f;
     public static bool handleEnabled;
     protected bool handleActive;
@@ -116,7 +121,7 @@ public class SpellCastSlingblade : SpellCastCharge {
     public Transform anchor;
     private Blade lastThrownBlade;
 
-    private BoolHandler imbueDisabled;
+    private Trigger.CallBack orgImbueTriggerCallback;
 
     public override void OnCatalogRefresh() {
         base.OnCatalogRefresh();
@@ -128,8 +133,6 @@ public class SpellCastSlingblade : SpellCastCharge {
     public override void Load(SpellCaster spellCaster) {
         base.Load(spellCaster);
 
-        imbueDisabled = new BoolHandler(false);
-        imbueDisabled.OnChangeEvent += OnImbueDisabled;
         anchor = new GameObject().transform;
         anchor.transform.SetParent(spellCaster.ragdollHand.transform);
         anchor.transform.SetPositionAndRotation(spellCaster.ragdollHand.transform.position,
@@ -145,6 +148,7 @@ public class SpellCastSlingblade : SpellCastCharge {
             handle.data.highlightDefaultTitle = "Slingshot";
             handle.handOverlapColliders = new List<Collider>();
             handle.SetTouch(false);
+            handle.SetTelekinesis(false);
             handleActive = false;
             handle.allowedHandSide
                 = spellCaster.side == Side.Left ? Interactable.HandSide.Right : Interactable.HandSide.Left;
@@ -152,14 +156,58 @@ public class SpellCastSlingblade : SpellCastCharge {
             handle.UnGrabbed += OnHandleUnGrab;
         }
 
-        quiver = Quiver.Get(spellCaster.mana.creature);
-        OnQuiverLoadEvent?.Invoke(this, quiver);
+        orgImbueTriggerCallback = spellCaster.imbueTrigger.callBack;
+
+        spellCaster.imbueTrigger.SetCallback(OnTriggerImbue);
         root = Step.Start();
         SetupModifiers();
+        Init();
     }
 
-    private void OnImbueDisabled(bool oldValue, bool newValue) {
-        imbueEnabled = !newValue;
+    public void Init() {
+        quiver = Quiver.Get(spellCaster?.mana.creature ?? imbue.imbueCreature);
+        OnQuiverLoadEvent?.Invoke(this, quiver);
+    }
+
+    protected void OnTriggerImbue(Collider other, bool enter) {
+        var colliderGroup = other.GetComponentInParent<ColliderGroup>()?.RootGroup;
+        if (!colliderGroup) return;
+        if (enter) {
+            if (colliderGroup.modifier.imbueType == ColliderGroupData.ImbueType.None) return;
+
+            // Can't imbue metal if the spellInstance doesn't support it
+            if (imbueAllowMetal == false
+                && colliderGroup.modifier.imbueType == ColliderGroupData.ImbueType.Metal) return;
+
+            // Don't allow imbue if the CG has a defined imbueCustomSpellID that is not the selected spell
+            if (!string.IsNullOrEmpty(colliderGroup.imbueCustomSpellID)
+                && !string.Equals(id, colliderGroup.imbueCustomSpellID, StringComparison.OrdinalIgnoreCase)) return;
+
+            // Don't allow imbue if the CG data disallows this spell from imbuing it
+            if (colliderGroup.modifier.imbueType == ColliderGroupData.ImbueType.Custom
+                && (colliderGroup.imbueCustomSpellID == null
+                    || !string.Equals(spellCaster.spellInstance.id, colliderGroup.imbueCustomSpellID,
+                        StringComparison.OrdinalIgnoreCase))) return;
+
+            // Check if already present
+            for (int i = spellCaster.imbueObjects.Count - 1; i >= 0; i--) {
+                if (spellCaster.imbueObjects[i].colliderGroup == colliderGroup) return;
+            }
+
+            // Add ColliderGroup to list
+            var item = colliderGroup.gameObject.GetComponentInParent<Item>();
+
+            if (item.TryGetComponent<Blade>(out _)) return;
+            spellCaster.imbueObjects.Add(new SpellCaster.ImbueObject(colliderGroup));
+        } else {
+            // Remove ColliderGroup to list
+            for (int i = spellCaster.imbueObjects.Count - 1; i >= 0; i--) {
+                var imbueObject = spellCaster.imbueObjects[i];
+                if (imbueObject.colliderGroup != colliderGroup) continue;
+                imbueObject.effectInstance?.End();
+                spellCaster.imbueObjects.RemoveAt(i);
+            }
+        }
     }
 
     protected void OnHandleGrab(RagdollHand hand, Handle handle, EventTime time) {
@@ -181,6 +229,7 @@ public class SpellCastSlingblade : SpellCastCharge {
         base.Unload();
 
         if (spellCaster == null) return;
+        spellCaster.imbueTrigger.callBack = orgImbueTriggerCallback;
         if (!spellCaster.ragdollHand.ragdoll.creature.isPlayer) {
             spellCaster.ragdollHand.ragdoll.forcePhysic.Remove(this);
         }
@@ -242,13 +291,13 @@ public class SpellCastSlingblade : SpellCastCharge {
     }
 
     public void DismissActiveBlade(bool skipQuiver = false) {
-        // imbueDisabled.Remove(this);
         if (activeBlade != null) {
             activeBlade.transform.localScale = Vector3.one;
         }
 
         if (!skipQuiver && activeBlade != null && !CanThrow) {
             if (quiver.AddToQuiver(activeBlade)) {
+                RemoveModifier(this, Modifier.ChargeSpeed);
                 activeBlade = null;
                 return;
             }
@@ -296,10 +345,18 @@ public class SpellCastSlingblade : SpellCastCharge {
             handleActive = true;
         }
 
+        if (handle && !handle.IsHanded()) handle.transform.position = spellCaster.magicSource.position;
+
+        if (lastThrownBlade
+            && lastThrownBlade.guided
+            && spellCaster.ragdollHand.creature.isPlayer
+            && spellCaster.ragdollHand.playerHand.controlHand.gripPressed != true) {
+            lastThrownBlade.StopGuidance(true);
+        }
+
         if (root.AtEnd()) root.Reset();
         if (!activeBlade) return;
 
-        if (handle && !handle.IsHanded()) handle.transform.position = spellCaster.magicSource.position;
         if (currentCharge < 1) {
             activeBlade.MoveTo(new MoveTarget(MoveMode.Joint, handJointLerp)
                 .Parent(spellCaster.magicSource)
@@ -333,7 +390,6 @@ public class SpellCastSlingblade : SpellCastCharge {
     public void OnBladeSpawn(Blade blade, bool isNew) {
         if (!isNew)
             currentCharge = 1;
-        // imbueDisabled.Add(this);
         activeBlade = blade;
         blade.SetTouch(false);
         blade.OnlyIgnoreRagdoll(spellCaster.mana.creature.ragdoll, true);
@@ -357,13 +413,23 @@ public class SpellCastSlingblade : SpellCastCharge {
     // IMBUE
     public override void Load(Imbue imbue) {
         base.Load(imbue);
+        Init();
         if (imbue.colliderGroup.collisionHandler?.item is not Item item) return;
         if (item.gameObject.GetComponent<Blade>() != null) return;
+        if (imbue.spellCastBase?.spellCaster?.imbueObjects is List<SpellCaster.ImbueObject> objects) {
+            for (var i = 0; i < objects.Count; i++) {
+                if (objects[i].colliderGroup?.collisionHandler?.item != item) continue;
+                objects.RemoveAt(i);
+                return;
+            }
+        }
+
         var blade = item.gameObject.AddComponent<Blade>();
         blade.Quiver = quiver;
         blade.canFullDespawn = false;
         blade.AllowDespawn(true);
-        if (blade.item.mainHandler == null) blade.RunAfter(() => blade.StartDespawn(), 0);
+        Debug.Log($"Going to quiver {quiver}");
+        if (blade.item.IsFree) blade.ReturnToQuiver(quiver, true);
     }
 
     public override void Throw(Vector3 velocity) {
@@ -393,10 +459,10 @@ public class SpellCastSlingblade : SpellCastCharge {
         Blade.slung.Add(activeBlade);
         lastThrownBlade = activeBlade;
         activeBlade.isDangerous.Add(Blade.UntilHit);
-        activeBlade.OnSlingEndEvent -= OnSlingEnd;
-        activeBlade.OnSlingEndEvent += OnSlingEnd;
-        activeBlade.OnHitEntityEvent -= OnHit;
-        activeBlade.OnHitEntityEvent += OnHit;
+        activeBlade.OnSlingEnd -= OnSlingEnd;
+        activeBlade.OnSlingEnd += OnSlingEnd;
+        activeBlade.OnHitEntity -= OnHit;
+        activeBlade.OnHitEntity += OnHit;
         activeBlade.StopGuidance();
         try {
             OnBladeThrowEvent?.Invoke(this, velocity, activeBlade);
@@ -413,12 +479,12 @@ public class SpellCastSlingblade : SpellCastCharge {
 
         void OnSlingEnd(Blade blade) {
             Blade.slung.Remove(activeBlade);
-            blade.OnHitEntityEvent -= OnHit;
-            blade.OnSlingEndEvent -= OnSlingEnd;
+            blade.OnHitEntity -= OnHit;
+            blade.OnSlingEnd -= OnSlingEnd;
         }
 
         void OnHit(Blade blade, ThunderEntity entity, CollisionInstance hit) {
-            blade.OnHitEntityEvent -= OnHit;
+            blade.OnHitEntity -= OnHit;
             OnHitEntityEvent?.Invoke(this, blade, entity, hit);
         }
     }
@@ -429,5 +495,6 @@ public enum Mode {
     Slicer,
     Rain,
     Blender,
-    Volley
+    Volley,
+    VolleySpraying
 }

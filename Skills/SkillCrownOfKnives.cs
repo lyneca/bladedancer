@@ -4,17 +4,17 @@ using ThunderRoad.Skill;
 namespace Bladedancer.Skills; 
 
 public class SkillCrownOfKnives : SpellSkillData {
-    public override void OnSpellLoad(SpellData spell, SpellCaster caster = null) {
-        base.OnSpellLoad(spell, caster);
-        if (spell is SpellCastSlingblade blade) {
-            blade.quiverEnabled = true;
-        }
+    public const string HasCrown = "HasCrown";
+
+    public override void OnSkillLoaded(SkillData skillData, Creature creature) {
+        base.OnSkillLoaded(skillData, creature);
+        creature.SetVariable(HasCrown, true);
     }
 
-    public override void OnSpellUnload(SpellData spell, SpellCaster caster = null) {
-        base.OnSpellUnload(spell, caster);
-        if (spell is SpellCastSlingblade blade) {
-            blade.quiverEnabled = true;
-        }
+    public override void OnSkillUnloaded(SkillData skillData, Creature creature) {
+        base.OnSkillUnloaded(skillData, creature);
+        creature.SetVariable(HasCrown, false);
+        if (Quiver.TryGet(creature, out var quiver))
+            quiver.DumpAll();
     }
 }

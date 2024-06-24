@@ -32,9 +32,12 @@ public class SkillForceBlades : SpellSkillData {
 
     public void OnHit(SpellCastCharge spell, float amount, bool fired, CollisionInstance hit, EventTime time) {
         if (hit.sourceColliderGroup?.collisionHandler?.item.GetComponent<Blade>()?.isDangerous != true) return;
-        (hit.targetColliderGroup?.collisionHandler?.Entity as Creature)?.MaxPush(Creature.PushType.Magic,
+        if (hit.targetColliderGroup == null) return;
+        var entity = hit.targetColliderGroup.collisionHandler?.ragdollPart?.ragdoll.creature as ThunderEntity ?? hit.targetColliderGroup.collisionHandler?.item;
+        if (entity == null) return;
+        hit.targetColliderGroup.collisionHandler?.ragdollPart?.ragdoll.creature?.MaxPush(Creature.PushType.Magic,
             hit.impactVelocity);
-        hit.targetColliderGroup?.collisionHandler?.Entity?.AddForce(hit.impactVelocity * multiplier, ForceMode.Impulse,
-            hit.targetColliderGroup.collisionHandler);
+
+        entity.AddForce(hit.impactVelocity * multiplier, ForceMode.Impulse, hit.targetColliderGroup.collisionHandler);
     }
 }

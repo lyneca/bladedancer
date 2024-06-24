@@ -1,7 +1,5 @@
-﻿using System.Collections;
-using ThunderRoad;
+﻿using ThunderRoad;
 using ThunderRoad.Skill;
-using UnityEngine;
 
 namespace Bladedancer.Skills;
 

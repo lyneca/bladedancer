@@ -55,18 +55,19 @@ public class RotarySlingshot : ThunderBehaviour {
     public Transform anchor;
 
     public override ManagedLoops EnabledManagedLoops => ManagedLoops.Update;
+    public bool onGrabHasRun;
 
     public bool Ready => spell != null
                          && spell.handle != null
                          && spell.handle.IsHanded()
                          && spell.spellCaster != null
                          && spell.quiver != null
-                         && spell.quiverEnabled;
+                         && onGrabHasRun;
 
     public float DrawAmount => Mathf.InverseLerp(0, SkillRotarySlingshot.drawLength,
         (spell.spellCaster.magicSource.position - spell.handle.transform.position).magnitude);
 
-    public int GetTarget() => Ready
+    public int TargetBladeCount => Ready
         ? Mathf.RoundToInt(DrawAmount * spell.quiver.Max)
         : 0;
 
@@ -85,6 +86,7 @@ public class RotarySlingshot : ThunderBehaviour {
     }
 
     public void End() {
+        onGrabHasRun = false;
         spell.OnHandleGrabEvent -= OnHandleGrab;
         if (spell.handle)
             spell.handle.OnHeldActionEvent -= OnHeldAction;
@@ -106,7 +108,7 @@ public class RotarySlingshot : ThunderBehaviour {
         anchor.transform.SetPositionAndRotation(spell.spellCaster.ragdollHand.transform.position,
             Quaternion.LookRotation(FireVector, spell.spellCaster.ragdollHand.ThumbDir));
 
-        int target = GetTarget();
+        int target = TargetBladeCount;
         if (blades.Count == target) return;
 
         var needsRefresh = false;
@@ -151,8 +153,12 @@ public class RotarySlingshot : ThunderBehaviour {
 
     private void OnHandleGrab(SpellCastSlingblade spell, Handle handle, EventTime time) {
         if (time == EventTime.OnStart) {
-            spell.DismissActiveBlade();
+            if (spell.activeBlade) blades.Add(spell.activeBlade);
+            spell.ReleaseBlade();
+            onGrabHasRun = true;
+            Refresh();
         } else {
+            onGrabHasRun = false;
             var vector = FireVector;
             if (vector.magnitude > skill.minFireMagnitude) {
                 for (int i = blades.Count - 1; i >= 0; i--) {
@@ -169,7 +175,7 @@ public class RotarySlingshot : ThunderBehaviour {
                 }
             } else {
                 for (int i = blades.Count - 1; i >= 0; i--) {
-                    blades[i].ReturnToQuiver(this.spell.quiver, true);
+                    blades[i].ReturnToQuiver(this.spell.quiver);
                 }
             }
 

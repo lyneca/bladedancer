@@ -1,6 +1,10 @@
-﻿using Bladedancer.Misc;
+﻿using System.Collections;
+using System.Collections.Generic;
+using Bladedancer.Misc;
 using ThunderRoad;
+using ThunderRoad.Skill.Spell;
 using UnityEngine;
+using UnityEngine.PlayerLoop;
 
 namespace Bladedancer.Skills;
 
@@ -9,7 +13,7 @@ public class SkillBladestorm : SpellBladeMergeData {
     [ModOptionFloatValuesDefault(0.05f, 0.2f, 0.05f, 0.15f)]
     [ModOptionSlider, ModOption("Bladestorm Fire Rate", "How fast Bladestorm fires daggers")]
     public static float shootCooldown;
-
+    
     public float sprayDaggerMinHandAngle = 20f;
     protected float lastShoot;
 
@@ -55,6 +59,98 @@ public class SkillBladestorm : SpellBladeMergeData {
     public override void OnMergeEnd(Quiver quiver) {
         base.OnMergeEnd(quiver);
         quiver?.SetMode(Mode.Crown);
+    }
+
+    public override void Throw(Vector3 velocity) {
+        base.Throw(velocity);
+        mana.StartCoroutine(ThrowRoutine(velocity));
+    }
+
+    public IEnumerator ThrowRoutine(Vector3 velocity) {
+        var center = new GameObject("ArcOfDaeKvir");
+        var rigidbody = center.AddComponent<Rigidbody>();
+        rigidbody.freezeRotation = true;
+        rigidbody.drag = SkillArcOfDaeKvir.drag;
+        rigidbody.useGravity = false;
+        
+        rigidbody.AddForce(velocity * SkillArcOfDaeKvir.force, ForceMode.VelocityChange);
+        var collider = center.AddComponent<SphereCollider>();
+        collider.radius = 0.5f;
+        center.layer = GameManager.GetLayer(LayerName.PlayerLocomotion);
+        
+        center.transform.position = Vector3.Slerp(mana.casterLeft.magicSource.position,
+            mana.casterRight.magicSource.position, 0.5f);
+
+        if (!Quiver.TryGet(mana.creature, out var quiver)) yield break;
+        quiver.Fill();
+
+        var arcBlades = new List<Blade>();
+        int count = quiver.blades.Count;
+        for (int i = quiver.blades.Count - 1; i >= 0; i--) {
+            var blade = quiver.blades[i];
+            quiver.RemoveFromQuiver(blade, false);
+            var rotation = Quaternion.AngleAxis(360f * i / count, Vector3.up);
+            var lookRotation = Quaternion.AngleAxis(360f * i / count - 60f, Vector3.up);
+
+            blade.MoveTo(new MoveTarget(MoveMode.Joint, 0)
+                .Parent(center.transform)
+                .At(rotation * Vector3.right * SkillArcOfDaeKvir.radius + Vector3.up * Random.Range(-0.2f, 0.2f),
+                    Quaternion.LookRotation(lookRotation * -Vector3.forward, Vector3.up)));
+
+            arcBlades.Add(blade);
+        }
+
+        var lightningBlades = new List<Blade>();
+        SpellCastLightning lightning = null;
+        if (mana.creature.TryGetSkill("TeslaWires", out SkillTeslaWires teslaWires)) {
+            for (var i = 0; i < arcBlades.Count; i++) {
+                if (!arcBlades[i].ImbuedWith("Lightning")) continue;
+                lightningBlades.Add(arcBlades[i]);
+                if (lightning != null) continue;
+                for (var j = 0; j < arcBlades[i].item.imbues.Count; j++) {
+                    if (arcBlades[i].item.imbues[j].spellCastBase is not SpellCastLightning imbuedSpell) continue;
+                    lightning = imbuedSpell;
+                    break;
+                }
+            }
+            
+            float duration = teslaWires.duration;
+            teslaWires.duration = SkillArcOfDaeKvir.duration;
+            if (lightning != null && lightningBlades.Count > 1) {
+                for (var i = 1; i < lightningBlades.Count; i++) {
+                    var blade = lightningBlades[i];
+                    var prevBlade = lightningBlades[i - 1];
+                    var pos = blade.item.transform.position;
+                    blade.transform.position = prevBlade.transform.position;
+                    teslaWires.OnBolt(lightning, prevBlade.item, blade.item,
+                        new CollisionInstance { contactPoint = prevBlade.transform.position });
+                    blade.transform.position = pos;
+                }
+            }
+
+            if (lightning != null && lightningBlades.Count > 2) {
+                var blade = lightningBlades[0];
+                var prevBlade = lightningBlades[lightningBlades.Count - 1];
+                var pos = blade.item.transform.position;
+                blade.transform.position = prevBlade.transform.position;
+                teslaWires.OnBolt(lightning, prevBlade.item, blade.item,
+                    new CollisionInstance { contactPoint = prevBlade.transform.position });
+                blade.transform.position = pos;
+            }
+            teslaWires.duration = duration;
+        }
+
+        quiver.RefreshQuiver();
+
+        float startTime = Time.time;
+        while (Time.time - startTime < SkillArcOfDaeKvir.duration) {
+            center.transform.rotation = Quaternion.AngleAxis(Time.time * SkillArcOfDaeKvir.speed, Vector3.up);
+            yield return 0;
+        }
+
+        for (var i = 0; i < arcBlades.Count; i++) {
+            if (arcBlades[i]) arcBlades[i].Release(false);
+        }
     }
 
     public override bool AllowImbue(Quiver quiver) => false;

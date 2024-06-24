@@ -16,8 +16,31 @@ public class SkillChainDetonate : SkillData {
         effectData = detonation.explosionEffectData;
         detonation.OnDetonateHitEvent -= OnDetonateHit;
         detonation.OnDetonateHitEvent += OnDetonateHit;
+        if (Quiver.TryGet(creature, out var quiver))
+            quiver.OnBladeThrow += OnBladeThrow;
     }
 
+    public void OnBladeThrow(Quiver quiver, Blade blade) {
+        if (!blade.ImbuedWith("Fire")) return;
+        blade.item.OnFlyEndEvent -= OnFlyEnd;
+        blade.item.OnFlyEndEvent += OnFlyEnd;
+    }
+
+    public void OnFlyEnd(Item item) {
+        item.OnFlyEndEvent -= OnFlyEnd;
+        if (item.isPenetrating && item.GetComponent<Blade>() is Blade blade) {
+            for (var j = 0; j < item.mainCollisionHandler.collisions.Length; j++) {
+                var collision = item.mainCollisionHandler.collisions[j];
+                if (collision.damageStruct.penetration == DamageStruct.Penetration.None
+                    || collision.targetColliderGroup == null
+                    || collision.targetColliderGroup.collisionHandler is not
+                        { ragdollPart.ragdoll.creature: Creature }) continue;
+                ExplodeBlade(blade, 0.5f, true);
+                break;
+            }
+        }
+    }
+    
     public override void OnSkillUnloaded(SkillData skillData, Creature creature) {
         base.OnSkillUnloaded(skillData, creature);
         var detonation = SkillCatalog.Data<SkillRemoteDetonation>();
@@ -31,19 +54,24 @@ public class SkillChainDetonate : SkillData {
         Vector3 closestPoint,
         float distance) {
         if (entity is Item && entity.GetComponent<Blade>() is Blade blade) {
-            entity.StartCoroutine(Detonate(blade, Random.Range(minTime, maxTime)));
+            ExplodeBlade(blade);
         }
     }
 
-    public IEnumerator Detonate(Blade blade, float time) {
+    public void ExplodeBlade(Blade blade, float time = -1, bool chain = false) {
+        if (time < 0) time = Random.Range(minTime, maxTime);
+        blade.StartCoroutine(Detonate(blade, time, chain));
+    }
+
+    public IEnumerator Detonate(Blade blade, float time, bool chain = false) {
         blade.AllowDespawn(false);
         yield return new WaitForSeconds(time);
         blade.AllowDespawn(true);
-        Explode(blade.transform.position);
+        Explode(blade.transform.position, chain);
         blade.Despawn();
     }
 
-    public void Explode(Vector3 position) {
+    public void Explode(Vector3 position, bool chain = false) {
         effectData.Spawn(position, Quaternion.identity).Play();
         var skill = SkillCatalog.Data<SkillRemoteDetonation>();
         foreach (var (thunderEntity, closestPoint) in ThunderEntity.InRadiusClosestPoint(
@@ -65,6 +93,7 @@ public class SkillChainDetonate : SkillData {
                         skill.forceMode);
                     break;
                 case Item obj:
+                    if (chain && obj.GetComponent<Blade>() is Blade blade) ExplodeBlade(blade);
                     obj.physicBody.AddExplosionForce(skill.force, position, skill.radius, 0.5f, skill.forceMode);
                     break;
             }

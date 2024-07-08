@@ -41,7 +41,7 @@ public class SpellBladeMergeData : SpellMergeData {
             switch (spell) {
                 case null:
                     continue;
-                case SpellCastSlingblade blade:
+                case SpellCastBlade blade:
                     blade.OnCastStop();
                     break;
                 default:

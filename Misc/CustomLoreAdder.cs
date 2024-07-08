@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Reflection;
 using ThunderRoad;
 using ThunderRoad.Modules;
-using Debug = UnityEngine.Debug;
 
 namespace Bladedancer; 
 
@@ -24,18 +22,18 @@ public class CustomLoreAdder : GameModeModule {
         foreach (var customLorePack in loreEntries) {
             if (!loreDict.TryGetValue(customLorePack.groupId, out var loreGroup)) continue;
             if (customLorePack.ToLorePack() is not LoreScriptableObject.LorePack pack) continue;
-            foreach (int i in pack.loreRequirement) {
-                Debug.Log($"Pack {loreGroup.name} getting requirement {i} for {pack.nameId}: '{loreGroup.GetPack(i)?.nameId}'");
-            }
-            Debug.Log(string.Join(", ", pack.loreRequirement));
+            // foreach (int i in pack.loreRequirement) {
+            //     Debug.Log($"Pack {loreGroup.name} getting requirement {i} for {pack.nameId}: '{loreGroup.GetPack(i)?.nameId}'");
+            // }
+            // Debug.Log(string.Join(", ", pack.loreRequirement));
             var list = new List<LoreScriptableObject.LorePack>(loreGroup.allLorePacks) { pack };
             loreGroup.rootLoreHashIds.Add(pack.hashId);
-            typeof(LoreScriptableObject).GetField("_hashIdToLorePack", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(loreGroup, null);
+            typeof(LoreScriptableObject).GetField("_hashIdToLorePack", BindingFlags.Instance | BindingFlags.NonPublic)?.SetValue(loreGroup, null);
             loreGroup.allLorePacks = list.ToArray();
         }
 
-        typeof(LoreModule).GetMethod("InitLoreState", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(module, Array.Empty<object>());
-        Debug.Log("Refreshed lore module with custom data");
+        module.InitLoreState();
+        // Debug.Log("Refreshed lore module with custom data");
     }
 
     public bool TryGetLoreModule(out LoreModule module) {
@@ -43,16 +41,11 @@ public class CustomLoreAdder : GameModeModule {
     }
 
     public List<int> GetAvailableLore() {
-        if (TryGetLoreModule(out var module))
-            return typeof(LoreModule).GetField("availableLore", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?.GetValue(module) as List<int>;
-        return null;
+        return TryGetLoreModule(out var module) ? module.availableLore : null;
     }
 
     public List<LoreScriptableObject> GetAllLoreScriptableObjects() {
-        if (!TryGetLoreModule(out LoreModule module)) return null;
-        return typeof(LoreModule).GetField("allLoreSO", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?.GetValue(module) as List<LoreScriptableObject>;
+        return TryGetLoreModule(out var module) ? module.allLoreSO : null;
     }
 
     public Dictionary<string, LoreScriptableObject> GetCurrentLoreDict() {
@@ -64,8 +57,6 @@ public class CustomLoreAdder : GameModeModule {
         for (var i = 0; i < allSOs.Count; i++) {
             if (allSOs[i].allLorePacks is not { Length: > 0 } packs
                 || packs[0].groupId is not string loreId) continue;
-
-            Debug.Log($"Adding {allSOs[i]} ({allSOs[i].name} to dict under ID {loreId}");
 
             dict[loreId] = allSOs[i];
         }

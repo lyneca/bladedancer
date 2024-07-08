@@ -3,23 +3,23 @@ using System.Collections.Generic;
 using Bladedancer.Skills;
 using ThunderRoad;
 using UnityEngine;
-using UnityEngine.Serialization;
 using Random = UnityEngine.Random;
 
 namespace Bladedancer; 
 
 public class Quiver : ThunderBehaviour {
+    public static List<int> allowedQuiverItemHashIds;
     public const string MaxCount = "MaxCrownCount";
     
     [SkillCategory("Crown of Knives", Category.Base, 2)]
-    [ModOptionIntValues(0, 12, 1)]
-    [ModOptionSlider, ModOption("Max Blade Count", "Maximum number of blades the Crown of Knives can store at once.", defaultValueIndex = 4)]
-    public static int baseQuiverCount = 4;
+    [ModOptionIntValuesDefault(0, 12, 1, 4)]
+    [ModOptionSlider, ModOption("Max Blade Count", "Maximum number of blades the Crown of Knives can store at once.")]
+    public static int baseQuiverCount;
 
     [SkillCategory("Crown of Knives", Category.Base, 2)]
-    [ModOptionFloatValues(30, 90, 30)]
-    [ModOptionSlider, ModOption("Crown Spread Angle", "Spread angle for daggers in the crown.", defaultValueIndex = 1)]
-    public static float quiverSpread = 60f;
+    [ModOptionFloatValuesDefault(30, 90, 30, 60)]
+    [ModOptionSlider, ModOption("Crown Spread Angle", "Spread angle for daggers in the crown.")]
+    public static float quiverSpread;
 
     public Creature creature;
     public Mode mode;
@@ -68,7 +68,7 @@ public class Quiver : ThunderBehaviour {
     public override ManagedLoops EnabledManagedLoops => ManagedLoops.Update;
 
     public void Awake() {
-        if (ModOptions.TryGetOption("Max Blade Count", out var maxBladeCountOption)) {
+        if (ModOptions.TryGetOption("Max Blade Count (TEMP)", out var maxBladeCountOption)) {
             maxBladeCountOption.ValueChanged += obj => {
                 MaxCountHandler.baseValue = obj is int count ? count : 6;
                 MaxCountHandler.Add(maxBladeCountOption, 1);
@@ -80,18 +80,21 @@ public class Quiver : ThunderBehaviour {
         if (ModOptions.TryGetOption("Crown Spread Angle", out var crownSpreadAngleOption)) {
             crownSpreadAngleOption.ValueChanged += _ => RefreshQuiver();
         }
+        
+        creature = GetComponent<Creature>();
+        creature.OnDespawnEvent += Despawn;
+        creature.OnKillEvent += OnKill;
+        
+        creature.ragdoll.OnStateChange += OnRagdollStateChange;
 
         preventBlock = new BoolHandler(false);
         ignoreCap = new BoolHandler(false);
         ignoreSelf = new BoolHandler(false);
         ignoreSelf.OnChangeEvent += OnIgnoreSelfChange;
         isDangerous = new BoolHandler(false);
-        creature = GetComponent<Creature>();
-        creature.OnDespawnEvent += Despawn;
-        creature.OnKillEvent += OnKill;
-        creature.ragdoll.OnStateChange += OnRagdollStateChange;
         
         isUnconscious = creature.brain.isUnconscious;
+        isCrouching = creature.currentLocomotion.isCrouched;
         
         ignoreCap.OnChangeEvent -= OnQuiverIgnoreCapChange;
         ignoreCap.OnChangeEvent += OnQuiverIgnoreCapChange;
@@ -137,6 +140,7 @@ public class Quiver : ThunderBehaviour {
 
     public List<Blade> blades = new();
     private bool isUnconscious;
+    private bool isCrouching;
     private bool isIncapacitated;
 
     public void InvokeBladeThrow(Blade blade) => OnBladeThrow?.Invoke(this, blade);
@@ -177,10 +181,22 @@ public class Quiver : ThunderBehaviour {
     public bool AddToQuiver(Blade blade, bool randomIndex = false) {
         if (!blade
             || blade == null
-            || IsFull
             || blades.Contains(blade)
             || !creature.TryGetVariable(SkillCrownOfKnives.HasCrown, out bool hasCrown)
             || !hasCrown) return false;
+
+        if (IsFull) {
+            if (!TryGetClosestFreeHolster(blade, out var holder) || !blade.TryDepositIn(holder)) return false;
+            blade.Quiver = this;
+            blade.OnAddToQuiver(this);
+            blade.AllowDespawn(false);
+            blade.SetTouch(false);
+            blade.item.StopFlying();
+            blade.item.StopThrowing();
+            blade.StopGuidance();
+            return true;
+        }
+
         if (randomIndex)
             blades.Insert(Random.Range(0, blades.Count), blade);
         else
@@ -188,6 +204,7 @@ public class Quiver : ThunderBehaviour {
         if (ignoreSelf) {
             blade.IgnoreBlades(blades);
         }
+
         blade.Quiver = this;
         blade.OnAddToQuiver(this);
         blade.AllowDespawn(false);
@@ -206,7 +223,7 @@ public class Quiver : ThunderBehaviour {
         blade.item.FullyUnpenetrate();
         blade.item.mainCollisionHandler.RemoveAllPenetratedObjects();
         if ((blade.transform.position - creature.ragdoll.targetPart.transform.position).sqrMagnitude
-            > SpellCastSlingblade.intangibleThreshold * SpellCastSlingblade.intangibleThreshold) {
+            > SpellCastBlade.intangibleThreshold * SpellCastBlade.intangibleThreshold) {
             blade.SetIntangible(true);
         }
 
@@ -259,7 +276,8 @@ public class Quiver : ThunderBehaviour {
     }
 
     public void Fill() {
-        while (blades.Count < Max)
+        int count = Max - blades.Count;
+        for (var i = 0; i < count; i++)
             Blade.Spawn((blade, _) => blade.ReturnToQuiver(this), creature.ragdoll.headPart.transform.position,
                 Quaternion.LookRotation(Vector3.up), creature, true);
     }
@@ -329,7 +347,15 @@ public class Quiver : ThunderBehaviour {
 
         if (bladesToCheck is null or { Count: 0 })
             bladesToCheck = blades;
-        
+
+        if (blades.Count == 0) {
+            if (TryGetBladeFromHolsters(position, out var holsterBlade)) {
+                blade = holsterBlade;
+                return true;
+            }
+        }
+
+
         blade = null;
         for (var i = 0; i < bladesToCheck.Count; i++) {
             var thisBlade = bladesToCheck[i];
@@ -345,6 +371,56 @@ public class Quiver : ThunderBehaviour {
         return true;
     }
 
+    public bool TryGetBladeFromHolsters(Vector3 position, out Blade blade) {
+        float minDistance = Mathf.Infinity;
+        blade = null;
+        for (var i = 0; i < creature.holders.Count; i++) {
+            var eachHolder = creature.holders[i];
+            float distance = (eachHolder.transform.position - position).sqrMagnitude;
+            if (distance > minDistance || eachHolder.items.Count <= 0 || eachHolder.items[0] is not Item item) continue;
+            if (item.GetComponent<Blade>() is Blade holsteredBlade) {
+                holsteredBlade.item.holder?.UnSnap(holsteredBlade.item);
+                blade = holsteredBlade;
+                minDistance = distance;
+            } else if (item.data.hashId == Blade.itemData.hashId) {
+                eachHolder.UnSnap(item);
+                item.gameObject.TryGetOrAddComponent(out blade);
+                minDistance = distance;
+            } else if (item.childHolders is { Count: > 0 }
+                && allowedQuiverItemHashIds.Contains(item.data.hashId)
+                && item.childHolders[0].items.Count > 0
+                && item.childHolders[0].items[0] is Item quiverHolsteredItem) {
+                minDistance = distance;
+                item.childHolders[0].UnSnap(quiverHolsteredItem);
+                quiverHolsteredItem.gameObject.TryGetOrAddComponent(out blade);
+            }
+        }
+
+        if (blade != null) blade.Quiver = this;
+
+        return blade != null;
+    }
+
+    public bool TryGetClosestFreeHolster(Blade blade, out Holder holder) {
+        float minDistance = Mathf.Infinity;
+        holder = null;
+        for (var i = 0; i < creature.holders.Count; i++) {
+            var eachHolder = creature.holders[i];
+            float distance = (eachHolder.transform.position - blade.transform.position).sqrMagnitude;
+            if (distance > minDistance || eachHolder.items.Count <= 0 || eachHolder.items[0] is not Item item) continue;
+            if (item.childHolders is { Count: > 0 }
+                && allowedQuiverItemHashIds.Contains(item.data.hashId)
+                && item.childHolders[0] is Holder childHolder
+                && childHolder.items.Count < childHolder.GetMaxQuantity()
+                && childHolder.data.SlotAllowed(blade.item.data.slot)) {
+                minDistance = distance;
+                holder = item.childHolders[0];
+            }
+        }
+
+        return holder != null;
+    }
+    
     public void SetMode(Mode mode, bool isDangerous = false) {
         if (this.mode == mode) return;
         this.mode = mode;
@@ -355,16 +431,16 @@ public class Quiver : ThunderBehaviour {
 
     protected override void ManagedUpdate() {
         base.ManagedUpdate();
-        if (creature.brain.isUnconscious != isUnconscious
-            || creature.brain.isIncapacitated != isIncapacitated) {
-            isIncapacitated = creature.brain.isIncapacitated;
-            isUnconscious = creature.brain.isUnconscious;
-            RefreshQuiver();
-        }
+        if (creature.brain.isUnconscious == isUnconscious
+            && creature.brain.isIncapacitated == isIncapacitated
+            && creature.currentLocomotion.isCrouched == isCrouching) return;
+        isIncapacitated = creature.brain.isIncapacitated;
+        isUnconscious = creature.brain.isUnconscious;
+        isCrouching = creature.currentLocomotion.isCrouched;
+        RefreshQuiver();
     }
 
     public void RefreshQuiver(bool changed = false) {
-
         // Fix broken daggers
         for (int i = blades.Count - 1; i >= 0; i--) {
             var blade = blades[i];
@@ -389,6 +465,7 @@ public class Quiver : ThunderBehaviour {
         blades = newQuiver;
         for (var i = 0; i < blades.Count; i++) {
             blades[i].MoveTo(GetQuiverTarget(i));
+            blades[i].OnlyIgnoreRagdoll(creature.ragdoll);
         }
 
         if (changed) {
@@ -430,8 +507,11 @@ public class Quiver : ThunderBehaviour {
 
     public MoveTarget? GetQuiverTarget(int i) {
         int count = blades.Count;
+        float maxSpread = (float)count / Max * quiverSpread;
+        float half = (blades.Count - 1f) / 2;
+        float offset = blades.Count == 1 ? 0 : (i - half) / half;
         switch (mode) {
-            case Mode.Crown when creature.brain.isChoke || creature.IsBurning:
+            case Mode.Crown when !creature.isPlayer && (creature.brain.isChoke || creature.IsBurning):
                 var burningPosition = Quaternion.AngleAxis(360f / count * i, Vector3.up)
                                    * new Vector3(0, 0.5f, 0.3f);
                 return new MoveTarget(MoveMode.PID, 6)
@@ -439,20 +519,25 @@ public class Quiver : ThunderBehaviour {
                     .At(burningPosition)
                     .Scale(ScaleMode.Scaled)
                     .LookAt(creature.ragdoll.targetPart.transform, true);
-            case Mode.Crown when creature.ragdoll.state is Ragdoll.State.Destabilized or Ragdoll.State.Inert:
+            case Mode.Crown when !creature.isPlayer && creature.ragdoll.state is Ragdoll.State.Destabilized or Ragdoll.State.Inert:
                 return null;
-            case Mode.Crown when creature.brain.isUnconscious
-                                 || creature.brain.isIncapacitated:
+            case Mode.Crown when !creature.isPlayer && (creature.brain.isUnconscious || creature.brain.isIncapacitated):
                 return new MoveTarget(MoveMode.PID, 2)
                     .Parent(creature.ragdoll.targetPart.transform, false)
-                    .At(Quaternion.AngleAxis(360f / count * i, Vector3.up) * new Vector3(1.3f, Random.Range(-0.3f, 0.3f), 0),
+                    .At(
+                        Quaternion.AngleAxis(360f / count * i, Vector3.up)
+                        * new Vector3(1.3f, Random.Range(-0.3f, 0.3f), 0),
                         Quaternion.LookRotation(Vector3.down))
                     .Scale(ScaleMode.Scaled)
                     .LookAt(creature.brain.isIncapacitated ? Player.local.head.transform : null);
+            case Mode.Crown when creature.isPlayer && creature.currentLocomotion.isCrouched:
+                return new MoveTarget(MoveMode.PID, 12)
+                    .Parent(creature.ragdoll.targetPart.transform)
+                    .At(Quaternion.AngleAxis(offset * maxSpread, Vector3.forward)
+                        * new Vector3(0.1f, 0, -0.3f))
+                    .Scale(ScaleMode.Scaled)
+                    .LookAt(creature.ragdoll.headPart.transform, true);
             case Mode.Crown:
-                float maxSpread = (float)count / Max * quiverSpread;
-                float half = (blades.Count - 1f) / 2;
-                float offset = blades.Count == 1 ? 0 : (i - half) / half;
                 return new MoveTarget(MoveMode.PID, 6)
                     .Parent(creature.ragdoll.targetPart.transform)
                     .At(Quaternion.AngleAxis(offset * maxSpread, Vector3.forward)

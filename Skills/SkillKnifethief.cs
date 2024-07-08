@@ -11,13 +11,13 @@ public class SkillKnifethief : SpellSkillData {
 
     public override void OnSpellLoad(SpellData spell, SpellCaster caster = null) {
         base.OnSpellLoad(spell, caster);
-        if (spell is SpellCastSlingblade blade)
+        if (spell is SpellCastBlade blade)
             blade.stealIfNearby = true;
     }
 
     public override void OnSpellUnload(SpellData spell, SpellCaster caster = null) {
         base.OnSpellUnload(spell, caster);
-        if (spell is SpellCastSlingblade blade)
+        if (spell is SpellCastBlade blade)
             blade.stealIfNearby = false;
     }
 }

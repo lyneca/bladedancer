@@ -11,7 +11,7 @@ public class SkillStartWithFullCrown : AISkillData {
 
     public override void OnSpellLoad(SpellData spell, SpellCaster caster = null) {
         base.OnSpellLoad(spell, caster); 
-        if (spell is not SpellCastSlingblade blade || caster == null) return;
+        if (spell is not SpellCastBlade blade || caster == null) return;
         blade.quiver.StartCoroutine(FillCrown(blade.quiver));
     }
     

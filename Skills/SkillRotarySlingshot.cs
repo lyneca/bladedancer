@@ -10,29 +10,47 @@ public class SkillRotarySlingshot : SpellSkillData {
     [ModOptionFloatValues(0.0f, 1.5f, 0.25f)]
     [ModOptionSlider, ModOption("Slingshot Max Draw Length", "How much you need to draw the bow to hit max velocity.", defaultValueIndex = 3)]
     public static float drawLength = 0.75f;
+    
     [SkillCategory("Rotary Slingshot", Category.Base, 2)]
     [ModOptionFloatValues(60f, 160f, 20f)]
     [ModOptionSlider, ModOption("Slingshot Full Fire Velocity", "Projectile shoot speed for all blades at once, based on how far you draw.", defaultValueIndex = 1)]
     public static float velocityMultiplier = 80f;
+    
     [SkillCategory("Rotary Slingshot", Category.Base, 2)]
     [ModOptionFloatValues(20f, 1600f, 20f)]
     [ModOptionSlider, ModOption("Slingshot Quick Fire Velocity", "Projectile shoot speed for single blades, based on how far you draw.", defaultValueIndex = 1)]
     public static float quickFireVelocity = 40f;
+
     public float minFireMagnitude = 0.1f;
+
+    public string snickEffectId;
+    public string fireEffectId;
+    public string fireAllEffectId;
+    
+    public EffectData snickEffectData;
+    public EffectData fireEffectData;
+    public EffectData fireAllEffectData;
+
+    public override void OnCatalogRefresh() {
+        base.OnCatalogRefresh();
+        snickEffectData = Catalog.GetData<EffectData>(snickEffectId);
+        fireEffectData = Catalog.GetData<EffectData>(fireEffectId);
+        fireAllEffectData = Catalog.GetData<EffectData>(fireAllEffectId);
+    }
 
     public override void OnSkillLoaded(SkillData skillData, Creature creature) {
         base.OnSkillLoaded(skillData, creature);
-        SpellCastSlingblade.handleEnabled = true;
+        SpellCastBlade.handleEnabled = true;
     }
 
     public override void OnSkillUnloaded(SkillData skillData, Creature creature) {
         base.OnSkillUnloaded(skillData, creature);
-        SpellCastSlingblade.handleEnabled = false;
+        SpellCastBlade.handleEnabled = false;
     }
 
     public override void OnSpellLoad(SpellData spell, SpellCaster caster = null) {
         base.OnSpellLoad(spell, caster);
-        if (spell is not SpellCastSlingblade slingblade
+        if (spell is not SpellCastBlade slingblade
             || caster == null
             || !caster.gameObject.TryGetOrAddComponent(out RotarySlingshot slicer)) return;
         slicer.Init(this, slingblade);
@@ -40,7 +58,7 @@ public class SkillRotarySlingshot : SpellSkillData {
 
     public override void OnSpellUnload(SpellData spell, SpellCaster caster = null) {
         base.OnSpellUnload(spell, caster);
-        if (spell is not SpellCastSlingblade
+        if (spell is not SpellCastBlade
             || caster == null
             || !caster.gameObject.TryGetOrAddComponent(out RotarySlingshot slicer)) return;
         slicer.End();
@@ -50,7 +68,7 @@ public class SkillRotarySlingshot : SpellSkillData {
 
 public class RotarySlingshot : ThunderBehaviour {
     public List<Blade> blades;
-    private SpellCastSlingblade spell;
+    private SpellCastBlade spell;
     private SkillRotarySlingshot skill;
     public Transform anchor;
 
@@ -71,7 +89,7 @@ public class RotarySlingshot : ThunderBehaviour {
         ? Mathf.RoundToInt(DrawAmount * spell.quiver.Max)
         : 0;
 
-    public void Init(SkillRotarySlingshot skill, SpellCastSlingblade spell) {
+    public void Init(SkillRotarySlingshot skill, SpellCastBlade spell) {
         this.spell = spell;
         this.skill = skill;
         anchor = new GameObject().transform;
@@ -112,13 +130,14 @@ public class RotarySlingshot : ThunderBehaviour {
         if (blades.Count == target) return;
 
         var needsRefresh = false;
-        if (blades.Count < target && spell.quiver.Count > 0) {
-            if (spell.quiver.TryGetClosestBlade(spell.spellCaster.transform.position, out var blade)) {
-                blades.Add(blade);
-                needsRefresh = true;
-            }
+        if (blades.Count < target && spell.quiver.TryGetClosestBlade(spell.spellCaster.transform.position, out var blade)) {
+            skill.snickEffectData?.Spawn(spell.spellCaster.magicSource).Play();
+            blades.Add(blade);
+            needsRefresh = true;
+            blade.IgnoreBlades(blades);
         } else if (blades.Count > target && blades.Count > 0) {
-            blades[0].DespawnOrReturn(spell.quiver, true);
+            blades[0].IgnoreBlades(blades, false);
+            blades[0].ReturnToQuiver(spell.quiver);
             blades.RemoveAt(0);
             needsRefresh = true;
         }
@@ -151,7 +170,7 @@ public class RotarySlingshot : ThunderBehaviour {
         blade.AddForce(velocity * mult, ForceMode.VelocityChange, false, true);
     }
 
-    private void OnHandleGrab(SpellCastSlingblade spell, Handle handle, EventTime time) {
+    private void OnHandleGrab(SpellCastBlade spell, Handle handle, EventTime time) {
         if (time == EventTime.OnStart) {
             if (spell.activeBlade) blades.Add(spell.activeBlade);
             spell.ReleaseBlade();
@@ -163,6 +182,7 @@ public class RotarySlingshot : ThunderBehaviour {
             if (vector.magnitude > skill.minFireMagnitude) {
                 for (int i = blades.Count - 1; i >= 0; i--) {
                     var blade = blades[i];
+                    skill.fireAllEffectData?.Spawn(blade.transform).Play();
                     Fire(blade, vector, false);
                 }
 
@@ -189,6 +209,7 @@ public class RotarySlingshot : ThunderBehaviour {
         var blade = blades[0];
         blades.Remove(blade);
         var vector = FireVector;
+        skill.fireEffectData?.Spawn(blade.transform).Play();
         Fire(blade, vector, true);
         spell.spellCaster.other.ragdollHand.HapticTick();
         this.RunAfter(() => {

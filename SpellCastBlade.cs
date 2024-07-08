@@ -11,25 +11,26 @@ using Object = UnityEngine.Object;
 
 namespace Bladedancer;
 
-public class SpellCastSlingblade : SpellCastCharge {
-    public string itemId = "ThrowablesDagger";
+public class SpellCastBlade : SpellCastCharge {
+    public string defaultBladeId = "ThrowablesDagger";
+    public List<string> allowedQuiverItemIds;
 
     public string handleId = "ObjectHandleLight";
     public HandleData handleData;
 
     [SkillCategory("General")]
     [ModOptionSlider, ModOptionFloatValuesDefault(5, 20, 5, 10)]
-    [ModOption("Joint Mass Scale", "Blade joint-mode mass scale. Makes joint-based movement stronger.")]
+    [ModOption("Default Joint Mass Scale", "Blade joint-mode mass scale. Makes joint-based movement stronger.")]
     public static float jointMassScale;
 
     [SkillCategory("General")]
     [ModOptionSlider, ModOptionFloatValuesDefault(250, 1000, 250, 500)]
-    [ModOption("Joint Spring", "Blade joint-mode spring strength")]
+    [ModOption("Default Joint Spring", "Blade joint-mode spring strength")]
     public static float jointSpring;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValuesDefault(0, 10, 0.5f, 1)]
-    [ModOption("Joint Damper", "Joint spring damper")]
+    [ModOptionSlider, ModOptionFloatValuesDefault(0, 100, 1f, 10)]
+    [ModOption("Default Joint Damper", "Joint spring damper")]
     public static float jointDamper;
 
     [SkillCategory("General")]
@@ -54,7 +55,7 @@ public class SpellCastSlingblade : SpellCastCharge {
     public static float pidMaxForce;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValuesDefault(0, 10, 1, 3)]
+    [ModOptionSlider, ModOptionFloatValuesDefault(0, 10, 1, 1)]
     [ModOption("PID Damping", "PID Damping")]
     public static float pidDamping;
 
@@ -92,22 +93,22 @@ public class SpellCastSlingblade : SpellCastCharge {
 
     public Handle handle;
 
-    public delegate void HandleGrabEvent(SpellCastSlingblade spell, Handle handle, EventTime time);
+    public delegate void HandleGrabEvent(SpellCastBlade spell, Handle handle, EventTime time);
     public event HandleGrabEvent OnHandleGrabEvent;
 
-    public delegate void BladeEvent(SpellCastSlingblade spell, Blade blade);
+    public delegate void BladeEvent(SpellCastBlade spell, Blade blade);
     public event BladeEvent OnBladeSpawnEvent;
 
-    public delegate void QuiverEvent(SpellCastSlingblade spell, Quiver quiver);
+    public delegate void QuiverEvent(SpellCastBlade spell, Quiver quiver);
     public event QuiverEvent OnQuiverLoadEvent;
 
-    public delegate void BladeThrowEvent(SpellCastSlingblade spell, Vector3 velocity, Blade blade);
+    public delegate void BladeThrowEvent(SpellCastBlade spell, Vector3 velocity, Blade blade);
     public event BladeThrowEvent OnBladeThrowEvent;
 
     public event SpellEvent OnSpellUpdateLoopEvent;
 
     public delegate void HitEntityEvent(
-        SpellCastSlingblade spell,
+        SpellCastBlade spell,
         Blade blade,
         ThunderEntity entity,
         CollisionInstance hit);
@@ -125,7 +126,14 @@ public class SpellCastSlingblade : SpellCastCharge {
 
     public override void OnCatalogRefresh() {
         base.OnCatalogRefresh();
-        Blade.itemData = Catalog.GetData<ItemData>(itemId);
+        Blade.itemData = Catalog.GetData<ItemData>(defaultBladeId);
+        Quiver.allowedQuiverItemHashIds = new List<int>();
+        if (allowedQuiverItemIds is not null) {
+            for (var i = 0; i < allowedQuiverItemIds.Count; i++) {
+                if (string.IsNullOrEmpty(allowedQuiverItemIds[i])) continue;
+                Quiver.allowedQuiverItemHashIds.Add(Animator.StringToHash(allowedQuiverItemIds[i].ToLower()));
+            }
+        }
         handleData = Catalog.GetData<HandleData>(handleId);
         ModOptions.Setup();
     }
@@ -470,6 +478,13 @@ public class SpellCastSlingblade : SpellCastCharge {
             Debug.LogWarning("Exception in OnBladeThrowEvent");
             Debug.LogException(e);
         }
+
+        // This is such a hack lol
+        float length = activeBlade.item.parryTargets[0].length;
+        activeBlade.item.parryTargets[0].length = 0.2f;
+        spellCaster.mana.creature.InvokeOnThrowEvent(spellCaster.ragdollHand,
+            activeBlade.item.GetMainHandle(spellCaster.side));
+        activeBlade.item.parryTargets[0].length = length;
 
         if (!spellCaster.mana.creature.isPlayer) {
             OnCastStop(true);

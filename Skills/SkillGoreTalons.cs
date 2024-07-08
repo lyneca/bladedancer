@@ -140,7 +140,7 @@ public class SkillGoreTalons : SkillSpellPunch {
             talons[i].OnUnPenetrate -= OnPenetrate;
             talons[i].isDangerous.Remove(this);
             talons[i].CancelMovement(true);
-            talons[i].DespawnOrReturn(Quiver.Main);
+            talons[i].ReturnToQuiver(Quiver.Main);
         }
 
         talons.Clear();

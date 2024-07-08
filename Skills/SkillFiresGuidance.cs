@@ -35,24 +35,27 @@ public class SkillFiresGuidance : SpellSkillData {
     [ModOptionSlider, ModOption("Fire's Guidance Haptic Max Angle", "Duration over which guidance 'kicks in' after throw")]
     public static float hapticAngleAmount;
 
+    public string grabEffectId;
+    protected EffectData grabEffectData;
     public override void OnCatalogRefresh() {
         base.OnCatalogRefresh();
         spellHashId = Animator.StringToHash(spellId.ToLower());
+        grabEffectData = Catalog.GetData<EffectData>(grabEffectId);
     }
 
     public override void OnSpellLoad(SpellData spell, SpellCaster caster = null) {
         base.OnSpellLoad(spell, caster);
-        if (caster?.mana.creature.isPlayer != true || spell is not SpellCastSlingblade blade) return;
+        if (caster?.mana.creature.isPlayer != true || spell is not SpellCastBlade blade) return;
         blade.OnBladeThrowEvent += OnBladeThrow;
     }
 
     public override void OnSpellUnload(SpellData spell, SpellCaster caster = null) {
         base.OnSpellUnload(spell, caster);
-        if (caster?.mana.creature.isPlayer != true || spell is not SpellCastSlingblade blade) return;
+        if (caster?.mana.creature.isPlayer != true || spell is not SpellCastBlade blade) return;
         blade.OnBladeThrowEvent -= OnBladeThrow;
     }
 
-    private void OnBladeThrow(SpellCastSlingblade spell, Vector3 velocity, Blade blade) {
+    private void OnBladeThrow(SpellCastBlade spell, Vector3 velocity, Blade blade) {
         if (blade.ImbuedWith(spellHashId)
             && spell.spellCaster.ragdollHand?.creature?.isPlayer == true
             && !spell.spellCaster.ragdollHand.playerHand.controlHand.gripPressed) {
@@ -60,7 +63,7 @@ public class SkillFiresGuidance : SpellSkillData {
         }
     }
 
-    public IEnumerator BladeThrowRoutine(SpellCastSlingblade spell, Blade blade) {
+    public IEnumerator BladeThrowRoutine(SpellCastBlade spell, Blade blade) {
         var caster = spell.spellCaster;
         caster.telekinesis.Disable(spell);
         float startTime = Time.unscaledTime;
@@ -85,6 +88,7 @@ public class SkillFiresGuidance : SpellSkillData {
 
         if (didGrip) {
             caster.ragdollHand.HapticTick();
+            grabEffectData?.Spawn(caster.magicSource).Play();
             blade.StartGuidance(spell.spellCaster.ragdollHand, guidanceSpeed);
             if (allowThrow)
                 blade.OnGuidanceStop += Throw;

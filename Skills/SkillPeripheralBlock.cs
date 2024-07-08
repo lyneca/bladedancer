@@ -117,14 +117,14 @@ public class SkillPeripheralBlock : SkillData {
         if (!blade || !blade.item) return;
         blade.item.mainCollisionHandler.OnCollisionStartEvent -= OnCollision;
         if (blade.shouldRetrieve)
-            blade.DespawnOrReturn(creature);
+            blade.ReturnToQuiver(creature);
     }
 
     public void CleanTrackedItems(Creature creature) {
         var items = trackedItems.ToList();
         for (var i = items.Count - 1; i >= 0; i--) {
             if (items[i].Key != null) continue;
-            items[i].Value.DespawnOrReturn(creature);
+            items[i].Value.ReturnToQuiver(creature);
             trackedItems.Remove(items[i].Key);
         }
     }

@@ -7,37 +7,52 @@ namespace Bladedancer.Skills;
 
 public class SkillForceBlades : SpellSkillData {
     [SkillCategory("Force Blades", Category.Base | Category.Gravity, 1)]
-    [ModOptionFloatValues(0.05f, 0.3f, 0.05f)]
-    [ModOptionSlider, ModOption("Force Multiplier", "How fast Bladestorm replenishes daggers", defaultValueIndex = 5)]
+    [ModOptionFloatValuesDefault(0.0f, 2f, 0.5f, 1.5f)]
+    [ModOptionSlider, ModOption("Force Blades Force Multiplier", "How much force is added with Force Blades")]
     public static float multiplier = 1.5f;
-    public int spellHashId;
+
+    public string hitEffectId;
+    protected EffectData hitEffectData;
 
     public override void OnCatalogRefresh() {
         base.OnCatalogRefresh();
-        spellHashId = Catalog.GetData<SpellCastGravity>("Gravity").hashId;
+        hitEffectData = Catalog.GetData<EffectData>(hitEffectId);
     }
 
-    public override void OnImbueLoad(SpellData spell, Imbue imbue) {
-        base.OnImbueLoad(spell, imbue);
-        if (spell.hashId != spellHashId
-            || imbue.colliderGroup.collisionHandler.item.GetComponent<Blade>() == null) return;
-        imbue.OnImbueHit -= OnHit;
-        imbue.OnImbueHit += OnHit;
+    public override void OnSkillLoaded(SkillData skillData, Creature creature) {
+        base.OnSkillLoaded(skillData, creature);
+        if (!Quiver.TryGet(creature, out var quiver)) return;
+        quiver.OnBladeThrow -= OnBladeThrow;
+        quiver.OnBladeThrow += OnBladeThrow;
     }
 
-    public override void OnImbueUnload(SpellData spell, Imbue imbue) {
-        base.OnImbueUnload(spell, imbue);
-        imbue.OnImbueHit -= OnHit;
+    public override void OnSkillUnloaded(SkillData skillData, Creature creature) {
+        base.OnSkillUnloaded(skillData, creature);
+        if (!Quiver.TryGet(creature, out var quiver)) return;
+        quiver.OnBladeThrow -= OnBladeThrow;
     }
 
-    public void OnHit(SpellCastCharge spell, float amount, bool fired, CollisionInstance hit, EventTime time) {
-        if (hit.sourceColliderGroup?.collisionHandler?.item.GetComponent<Blade>()?.isDangerous != true) return;
-        if (hit.targetColliderGroup == null) return;
-        var entity = hit.targetColliderGroup.collisionHandler?.ragdollPart?.ragdoll.creature as ThunderEntity ?? hit.targetColliderGroup.collisionHandler?.item;
-        if (entity == null) return;
-        hit.targetColliderGroup.collisionHandler?.ragdollPart?.ragdoll.creature?.MaxPush(Creature.PushType.Magic,
-            hit.impactVelocity);
+    public void OnBladeThrow(Quiver quiver, Blade blade) {
+        if (!blade.ImbuedWith("Gravity")) return;
+        blade.item.mainCollisionHandler.OnCollisionStartEvent -= CollisionStart;
+        blade.item.mainCollisionHandler.OnCollisionStartEvent += CollisionStart;
+        return;
 
-        entity.AddForce(hit.impactVelocity * multiplier, ForceMode.Impulse, hit.targetColliderGroup.collisionHandler);
+        void CollisionStart(CollisionInstance hit) {
+            blade.item.mainCollisionHandler.OnCollisionStartEvent -= CollisionStart;
+            if (!blade.TryGetImbue("Gravity", out var imbue)) return;
+            if (hit.targetColliderGroup == null) return;
+
+            var entity = hit.targetColliderGroup.collisionHandler?.ragdollPart?.ragdoll.creature as ThunderEntity
+                         ?? hit.targetColliderGroup.collisionHandler?.item;
+            if (entity == null) return;
+
+            hit.targetColliderGroup.collisionHandler?.ragdollPart?.ragdoll.creature?.MaxPush(Creature.PushType.Magic,
+                hit.impactVelocity);
+
+            hitEffectData?.Spawn(hit.contactPoint, Quaternion.identity)?.Play();
+            entity.AddForce(hit.impactVelocity * multiplier * imbue.EnergyRatio, ForceMode.Impulse,
+                hit.targetColliderGroup.collisionHandler);
+        }
     }
 }

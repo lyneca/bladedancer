@@ -97,10 +97,11 @@
         <Compile Include="Skills\SkillPeripheralBlock.cs" />
         <Compile Include="Skills\SkillRotarySlingshot.cs" />
         <Compile Include="Skills\SkillSeekerTwin.cs" />
+        <Compile Include="Skills\SkillTidalPull.cs" />
         <Compile Include="Skills\SkillTwinBladeMaestro.cs" />
         <Compile Include="Skills\SkillVersatility.cs" />
         <Compile Include="Skills\SkillVortexBlender.cs" />
-        <Compile Include="SpellCastSlingblade.cs" />
+        <Compile Include="SpellCastBlade.cs" />
         <Compile Include="Properties\AssemblyInfo.cs"/>
     </ItemGroup>
     <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets"/>

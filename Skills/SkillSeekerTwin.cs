@@ -14,19 +14,19 @@ public class SkillSeekerTwin : SpellSkillData {
 
     public override void OnSpellLoad(SpellData spell, SpellCaster caster = null) {
         base.OnSpellLoad(spell, caster);
-        if (spell is not SpellCastSlingblade slingblade) return;
+        if (spell is not SpellCastBlade slingblade) return;
         slingblade.OnHitEntityEvent -= OnHitEntity;
         slingblade.OnHitEntityEvent += OnHitEntity;
     }
 
     public override void OnSpellUnload(SpellData spell, SpellCaster caster = null) {
         base.OnSpellUnload(spell, caster);
-        if (spell is SpellCastSlingblade slingblade) {
+        if (spell is SpellCastBlade slingblade) {
             slingblade.OnHitEntityEvent -= OnHitEntity;
         }
     }
 
-    private void OnHitEntity(SpellCastSlingblade spell, Blade blade, ThunderEntity entity, CollisionInstance hit) {
+    private void OnHitEntity(SpellCastBlade spell, Blade blade, ThunderEntity entity, CollisionInstance hit) {
         if (entity is not Creature creature) return;
         if (Time.realtimeSinceStartup - lastHit < delay
             || creature == spell.spellCaster.mana.creature

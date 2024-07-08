@@ -45,6 +45,8 @@ public class SkillChainDetonate : SkillData {
         base.OnSkillUnloaded(skillData, creature);
         var detonation = SkillCatalog.Data<SkillRemoteDetonation>();
         detonation.OnDetonateHitEvent -= OnDetonateHit;
+        if (Quiver.TryGet(creature, out var quiver))
+            quiver.OnBladeThrow -= OnBladeThrow;
     }
 
     private void OnDetonateHit(
@@ -53,7 +55,7 @@ public class SkillChainDetonate : SkillData {
         ThunderEntity entity,
         Vector3 closestPoint,
         float distance) {
-        if (entity is Item && entity.GetComponent<Blade>() is Blade blade) {
+        if (entity is Item && entity.GetComponent<Blade>() is { InQuiver: false } blade) {
             ExplodeBlade(blade);
         }
     }
@@ -93,7 +95,7 @@ public class SkillChainDetonate : SkillData {
                         skill.forceMode);
                     break;
                 case Item obj:
-                    if (chain && obj.GetComponent<Blade>() is Blade blade) ExplodeBlade(blade);
+                    if (chain && obj.GetComponent<Blade>() is { InQuiver: false } blade) ExplodeBlade(blade);
                     obj.physicBody.AddExplosionForce(skill.force, position, skill.radius, 0.5f, skill.forceMode);
                     break;
             }

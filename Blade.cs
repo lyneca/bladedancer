@@ -105,7 +105,7 @@ public class Blade : ThunderBehaviour {
         set {
             if (Quiver)
                 lastQuiver = Quiver;
-            if (value != null) {
+            if (value != null && value != lastQuiver) {
                 lastQuiver = value;
                 OnSlingEnd?.Invoke(this);
                 SetOwner(value);
@@ -116,8 +116,8 @@ public class Blade : ThunderBehaviour {
 
     public Quiver OwningQuiver => Quiver ?? lastQuiver;
 
-    public bool InQuiver => Quiver != null;
-    public bool Dangerous => isDangerous || InQuiver && (Quiver?.isDangerous ?? false);
+    public bool InQuiver => Quiver != null && Quiver.Has(this);
+    public bool Dangerous => isDangerous || (InQuiver && Quiver.isDangerous);
 
     public bool IsValid
         => item
@@ -125,6 +125,9 @@ public class Blade : ThunderBehaviour {
            && item.isUsed
            && item.transform
            && Player.local
+           && !float.IsNaN(item.transform.position.x)
+           && !float.IsNaN(item.transform.position.y)
+           && !float.IsNaN(item.transform.position.z)
            && !float.IsInfinity(item.transform.position.x)
            && !float.IsInfinity(item.transform.position.y)
            && !float.IsInfinity(item.transform.position.z)
@@ -156,6 +159,7 @@ public class Blade : ThunderBehaviour {
         closest = null;
         for (var i = 0; i < slung.Count; i++) {
             var blade = slung[i];
+            if (blade == null) continue;
             if (ignoreQuiver != null && blade.lastQuiver == ignoreQuiver) continue;
             float bladeDistance = (blade.transform.position - position).sqrMagnitude;
             if (bladeDistance > radius) continue;
@@ -208,10 +212,12 @@ public class Blade : ThunderBehaviour {
         jointTarget.isKinematic = true;
         shouldRetrieve = true;
         item.ForceLayer(LayerName.MovingItem);
-        pid = new RBPID(item.physicBody.rigidBody, forceMode: SpellCastSlingblade.pidForceMode,
-                maxForce: SpellCastSlingblade.pidMaxForce, anchor: item.GetLocalCenter())
-            .Position(10, 0, SpellCastSlingblade.pidDamping)
+        pid = new RBPID(item.physicBody.rigidBody, forceMode: SpellCastBlade.pidForceMode,
+                maxForce: SpellCastBlade.pidMaxForce, anchor: item.GetLocalCenter())
+            .Position(10, 0, SpellCastBlade.pidDamping)
             .Rotation(30, 0, 3);
+        // hack to get blades that are fire imbued on start to not have molten arc
+        this.RunAfter(() => SetMoltenArc(!InQuiver), 0.1f);
     }
 
     private void OnImbuesChange() {
@@ -230,6 +236,7 @@ public class Blade : ThunderBehaviour {
         all.Remove(this);
         if (wasSlung)
             OnSlingEnd?.Invoke(this);
+        slung.Remove(this);
         Quiver?.ForceRemoveFromQuiver(this);
         Destroy(this);
     }
@@ -245,6 +252,8 @@ public class Blade : ThunderBehaviour {
         for (var i = 0; i < item.imbues.Count; i++) {
             var imbue = item.imbues[i];
             if (newQuiver.creature.HasSkill(imbue.spellCastBase)) {
+                imbue.imbueCreature ??= newQuiver.creature;
+                imbue.imbueCreature.mana.InvokeOnImbueUnload(imbue.spellCastBase, imbue);
                 imbue.TempUnloadSpell();
                 imbue.TempReloadSpell(newQuiver.creature.handLeft.caster);
             }
@@ -409,10 +418,10 @@ public class Blade : ThunderBehaviour {
 
     public IEnumerator DespawnRoutine() {
         despawning.Add(this);
-        yield return new WaitForSeconds(retrieveDelay == -1 ? SpellCastSlingblade.collectTime : retrieveDelay);
+        yield return new WaitForSeconds(retrieveDelay == -1 ? SpellCastBlade.collectTime : retrieveDelay);
         retrieveDelay = -1;
         despawning.Remove(this);
-        if (IsFree) DespawnOrReturn(Quiver ? Quiver : lastQuiver);
+        if (IsFree) ReturnOrDespawn(Quiver ? Quiver : lastQuiver);
     }
 
     public void AllowDespawn(bool enabled, float retrieveDelay = -1) {
@@ -422,7 +431,7 @@ public class Blade : ThunderBehaviour {
         if (!autoDespawn) StopDespawn();
     }
 
-    public void ReturnToQuiver(Quiver quiver, bool force = false) {
+    public bool ReturnToQuiver(Quiver quiver, bool force = false) {
         transform.localScale = Vector3.one;
         StartCoroutine(UnSling());
         item.StopThrowing();
@@ -432,8 +441,25 @@ public class Blade : ThunderBehaviour {
             && quiver
             && quiver.creature
             && !quiver.creature.isKilled
-            && quiver.AddToQuiver(this)) return;
+            && quiver.AddToQuiver(this)) return true;
         Release();
+        return false;
+    }
+
+    public bool TryDepositIn(Holder holder) {
+        if (InQuiver) Quiver.RemoveFromQuiver(this);
+        if (!holder.ObjectAllowed(item) || !holder.HasSlotFree()) return false;
+        OnlyIgnoreRagdoll(Quiver.creature.ragdoll);
+        MoveTo(new MoveTarget(MoveMode.PID, 6)
+            .Parent(holder.transform)
+            .LookAt(holder.transform)
+            .OnReach(blade => {
+                blade.Release();
+                holder.Snap(blade.item);
+                if (blade && blade.item && blade.item.holder != null)
+                    blade.StartDespawn();
+            }));
+        return true;
     }
     
     public void IgnoreItem(Item other, bool ignore = true) {
@@ -465,10 +491,10 @@ public class Blade : ThunderBehaviour {
         }
     }
 
-    public void DespawnOrReturn(Quiver quiver, bool randomIndex = false) {
+    public void ReturnOrDespawn(Quiver quiver) {
         if (shouldRetrieve
             && quiver
-            && quiver.AddToQuiver(this, randomIndex)) return;
+            && ReturnToQuiver(quiver)) return;
 
         // Couldn't add to quiver, despawn this blade
         if (canFullDespawn) Despawn();
@@ -519,7 +545,7 @@ public class Blade : ThunderBehaviour {
         if (InQuiver)
             SetIntangible(MoveTarget is MoveTarget target
                           && (transform.position - target.Get.position).sqrMagnitude
-                          > SpellCastSlingblade.intangibleThreshold * SpellCastSlingblade.intangibleThreshold);
+                          > SpellCastBlade.intangibleThreshold * SpellCastBlade.intangibleThreshold);
 
         if (MoveTarget == null && homingTarget != null) {
             var target = homingTarget is Creature creature ? creature.ragdoll.targetPart.transform : homingTarget.RootTransform;
@@ -632,7 +658,12 @@ public class Blade : ThunderBehaviour {
             return;
         }
 
-        if (intangible && (transform.position - position).sqrMagnitude < SpellCastSlingblade.intangibleThreshold)
+        if (target is { hasReached: false, actionOnReach: Action<Blade> action } && DistanceToTarget <= target.reachRadius) {
+            target.hasReached = true;
+            action.Invoke(this);
+        }
+
+        if (intangible && (transform.position - position).sqrMagnitude < SpellCastBlade.intangibleThreshold)
             SetIntangible(false);
         item.SetPhysicModifier(this, 0);
 
@@ -657,9 +688,9 @@ public class Blade : ThunderBehaviour {
                         // item.customCenterOfMass = orgCustomCenterOfMass * scaleRatio;
                     } else {
                         transform.localScale = Vector3.Lerp(transform.localScale, Vector3.one * scaleRatio,
-                            Time.unscaledDeltaTime * SpellCastSlingblade.scaleSpeed);
+                            Time.unscaledDeltaTime * SpellCastBlade.scaleSpeed);
                         item.physicBody.mass = Mathf.Lerp(item.physicBody.mass, scaledMass,
-                            Time.unscaledDeltaTime * SpellCastSlingblade.scaleSpeed);
+                            Time.unscaledDeltaTime * SpellCastBlade.scaleSpeed);
                         // item.customCenterOfMass = orgCustomCenterOfMass * scaleRatio;
                     }
 
@@ -678,9 +709,9 @@ public class Blade : ThunderBehaviour {
                         // item.customCenterOfMass = orgCustomCenterOfMass;
                     } else {
                         transform.localScale = Vector3.Lerp(transform.localScale, Vector3.one,
-                            Time.unscaledDeltaTime * SpellCastSlingblade.scaleSpeed);
+                            Time.unscaledDeltaTime * SpellCastBlade.scaleSpeed);
                         item.physicBody.mass = Mathf.Lerp(item.physicBody.mass, orgMass,
-                            Time.unscaledDeltaTime * SpellCastSlingblade.scaleSpeed);
+                            Time.unscaledDeltaTime * SpellCastBlade.scaleSpeed);
                         // item.customCenterOfMass = orgCustomCenterOfMass;
                     }
 
@@ -810,21 +841,17 @@ public class Blade : ThunderBehaviour {
             configJoint.xMotion = configJoint.yMotion = configJoint.zMotion = ConfigurableJointMotion.Free;
 
             configJoint.xDrive = configJoint.yDrive = configJoint.zDrive = configJoint.slerpDrive = new JointDrive {
-                positionSpring = moveTarget?.jointSpring ?? SpellCastSlingblade.jointSpring,
-                positionDamper = moveTarget?.jointDamper ?? SpellCastSlingblade.jointDamper,
-                maximumForce = moveTarget?.jointMaxForce ?? SpellCastSlingblade.jointMaxForce
+                positionSpring = moveTarget?.jointSpring ?? SpellCastBlade.jointSpring,
+                positionDamper = moveTarget?.jointDamper ?? SpellCastBlade.jointDamper,
+                maximumForce = moveTarget?.jointMaxForce ?? SpellCastBlade.jointMaxForce
             };
             joint = configJoint;
         } else {
             switch (target.jointType) {
-                // case JointType.Fixed:
-                //     var fixedJoint = targetBody.gameObject.AddComponent<FixedJoint>();
-                //     joint = fixedJoint;
-                //     break;
                 case JointType.Spring:
                     var springJoint = targetBody.gameObject.AddComponent<SpringJoint>();
-                    springJoint.spring = moveTarget?.jointSpring ?? SpellCastSlingblade.jointSpring;
-                    springJoint.damper = moveTarget?.jointDamper ?? SpellCastSlingblade.jointDamper;
+                    springJoint.spring = moveTarget?.jointSpring ?? SpellCastBlade.jointSpring;
+                    springJoint.damper = moveTarget?.jointDamper ?? SpellCastBlade.jointDamper;
                     joint = springJoint;
                     break;
             }
@@ -840,7 +867,7 @@ public class Blade : ThunderBehaviour {
             joint.anchor = Vector3.zero;
         }
 
-        float massScale = moveTarget?.jointMassScale ?? SpellCastSlingblade.jointMassScale;
+        float massScale = moveTarget?.jointMassScale ?? SpellCastBlade.jointMassScale;
         joint.massScale = 1 / massScale;
         joint.connectedMassScale = massScale;
         
@@ -853,6 +880,37 @@ public class Blade : ThunderBehaviour {
         customJointTarget = null;
     }
 
+    public static Creature AimAssist(
+        Ray ray,
+        float distance,
+        float angle,
+        out Transform targetPoint,
+        Func<Creature, bool> filter,
+        CreatureType weakpointFilter) {
+        var target = Creature.AimAssist(ray, distance, angle, out targetPoint, filter, weakpointFilter) as Creature;
+        if (target != null) {
+            // hack to enable extra weakpoints
+            var oldList = target.weakpoints;
+            target.weakpoints = new List<Transform> {
+                target.ragdoll.headPart.transform,
+                target.handLeft.transform,
+                target.handRight.transform,
+                target.footLeft.transform,
+                target.footRight.transform,
+                target.footLeft.upperLegBone.transform,
+                target.footRight.upperLegBone.transform
+            };
+            if (Creature.AimAssist(ray, distance, angle, out targetPoint, filter, weakpointFilter)) {
+                target.weakpoints = oldList;
+                return target;
+            }
+
+            target.weakpoints = oldList;
+        }
+
+        return null;
+    }
+
     public void AddForce(Vector3 force, ForceMode forceMode, bool aimAssist = false, bool resetVelocity = false, RagdollHand hand = null) {
         throwTime = Time.time;
         if (resetVelocity) {
@@ -863,26 +921,12 @@ public class Blade : ThunderBehaviour {
 
         if (aimAssist) {
             var ray = new Ray(position, force);
-            var target = Creature.AimAssist(ray, 20, 30, out var targetPoint, Filter.EnemyOf(item.lastHandler?.creature), CreatureType.Animal | CreatureType.Golem | CreatureType.Human) as Creature;
-            if (target != null) {
-                // hack to enable extra weakpoints
-                var oldList = target.weakpoints;
-                target.weakpoints = new List<Transform> {
-                    target.ragdoll.headPart.transform,
-                    target.handLeft.transform,
-                    target.handRight.transform,
-                    target.footLeft.transform,
-                    target.footRight.transform,
-                    target.footLeft.upperLegBone.transform,
-                    target.footRight.upperLegBone.transform
-                };
-                if (Creature.AimAssist(ray, 20, 30, out targetPoint, Filter.EnemyOf(item.lastHandler?.creature),
-                        CreatureType.Animal | CreatureType.Golem | CreatureType.Human)) {
-                    force = (targetPoint.position - transform.position).normalized * force.magnitude;
-                }
-                target.weakpoints = oldList;
+            if (AimAssist(ray, 20, 30, out var targetPoint, Filter.EnemyOf(item.lastHandler?.creature),
+                    CreatureType.Animal | CreatureType.Golem | CreatureType.Human) is Creature creature) {
+                force = (targetPoint.position - transform.position).normalized * force.magnitude;
             }
         }
+
         item.AddForce(force, ForceMode.VelocityChange);
         item.Throw(1, Item.FlyDetection.Forced);
         Quiver?.InvokeBladeThrow(this);
@@ -895,6 +939,20 @@ public class Blade : ThunderBehaviour {
 
     public bool ImbuedWith(string spellId)
         => !string.IsNullOrEmpty(spellId) && ImbuedWith(Animator.StringToHash(spellId.ToLower()));
+
+    public bool TryGetImbue(string spellId, out Imbue imbue) {
+        imbue = null;
+        if (string.IsNullOrEmpty(spellId)) return false;
+        int hashId = Animator.StringToHash(spellId.ToLower());
+        if (item.imbues == null) return false;
+        for (var i = 0; i < item.imbues.Count; i++) {
+            if (item.imbues[i].spellCastBase is SpellCastCharge spell && spell.hashId == hashId) {
+                imbue = item.imbues[i];
+                return true;
+            }
+        }
+        return false;
+    }
 
     public bool ImbuedWith(int spellHashId) {
         if (item.imbues == null) return false;
@@ -946,6 +1004,10 @@ public struct MoveTarget {
     private Func<(Vector3 position, Quaternion rotation)> func;
     public ScaleMode scale = ScaleMode.FullSize;
     public bool scaleInstantly = false;
+
+    public Action<Blade> actionOnReach = null;
+    public float reachRadius = 0.1f;
+    public bool hasReached;
     
     public Rigidbody jointBody;
     public JointType? jointType = null;
@@ -971,6 +1033,12 @@ public struct MoveTarget {
         this.lookTarget = lookTarget;
         this.lookUpDir = lookUpDir;
         this.lookAway = lookAway;
+        return this;
+    }
+
+    public MoveTarget OnReach(Action<Blade> action, float radius = 0.1f) {
+        actionOnReach = action;
+        reachRadius = radius;
         return this;
     }
 

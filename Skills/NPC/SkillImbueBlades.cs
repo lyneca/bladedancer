@@ -25,7 +25,7 @@ public class SkillImbueBlades : AISkillData {
                             && each.showInTree
                             && each.allowSkill
                             && !each.hideInSkillMenu
-                            && each is not SpellCastSlingblade, out spell);
+                            && each is not SpellCastBlade, out spell);
         }
 
         spell.spellCaster = creature.handRight.caster;
@@ -35,7 +35,7 @@ public class SkillImbueBlades : AISkillData {
 
     public override void OnSpellLoad(SpellData spell, SpellCaster caster = null) {
         base.OnSpellLoad(spell, caster);
-        if (spell is not SpellCastSlingblade blade
+        if (spell is not SpellCastBlade blade
             || caster == null
             || !caster.mana.creature.TryGetVariable(ImbueBladeSpell, out SpellCastCharge imbueSpell)) return;
 
@@ -49,12 +49,12 @@ public class SkillImbueBlades : AISkillData {
 
     public override void OnSpellUnload(SpellData spell, SpellCaster caster = null) {
         base.OnSpellUnload(spell, caster);
-        if (spell is not SpellCastSlingblade blade) return;
+        if (spell is not SpellCastBlade blade) return;
         blade.OnBladeSpawnEvent -= OnBladeSpawn;
         blade.quiver.OnBladeAddEvent -= OnBladeAdd;
     }
 
-    private void OnBladeSpawn(SpellCastSlingblade bladeSpell, Blade blade) {
+    private void OnBladeSpawn(SpellCastBlade bladeSpell, Blade blade) {
         if (!blade
             || !blade.item
             || blade.item.colliderGroups is not { Count: > 0 } groups

@@ -14,7 +14,7 @@ public class GolemBladeRain : GolemBladeAbility {
 
     public override void OnUpdate() {
         base.OnUpdate();
-        if (state == State.Firing && Time.time - lastBladeFire > fireDelay) {
+        if (state == State.Firing && Time.time - lastBladeFire > fireDelay && blades.Count > 0) {
             lastBladeFire = Time.time;
             var blade = blades[blades.Count - 1];
             blades.Remove(blade);
@@ -23,6 +23,8 @@ public class GolemBladeRain : GolemBladeAbility {
                 Vector3.up * 15f
                 + Vector3.ProjectOnPlane(golem.attackTarget.position - Root.position, Vector3.up).normalized * 5,
                 ForceMode.VelocityChange, false, true);
+            Blade.slung.Add(blade);
+            blade.wasSlung = true;
             blade.RunAfter(() => OnBladeDelay(blade), 1f);
         }
     }

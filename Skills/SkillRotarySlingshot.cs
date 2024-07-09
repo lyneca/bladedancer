@@ -180,9 +180,9 @@ public class RotarySlingshot : ThunderBehaviour {
             onGrabHasRun = false;
             var vector = FireVector;
             if (vector.magnitude > skill.minFireMagnitude) {
+                skill.fireAllEffectData?.Spawn(spell.spellCaster.transform).Play();
                 for (int i = blades.Count - 1; i >= 0; i--) {
                     var blade = blades[i];
-                    skill.fireAllEffectData?.Spawn(blade.transform).Play();
                     Fire(blade, vector, false);
                 }
 

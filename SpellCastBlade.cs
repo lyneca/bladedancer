@@ -119,10 +119,16 @@ public class SpellCastBlade : SpellCastCharge {
 
     public Quiver quiver;
 
+    public string spawnEffectId = "SpawnBlade";
+    public EffectData spawnEffectData;
+    public string retrieveEffectId = "RetrieveBlade";
+    public EffectData retrieveEffectData;
+
     public Transform anchor;
     private Blade lastThrownBlade;
 
     private Trigger.CallBack orgImbueTriggerCallback;
+    private bool hasReachedFullCharge;
 
     public override void OnCatalogRefresh() {
         base.OnCatalogRefresh();
@@ -135,6 +141,9 @@ public class SpellCastBlade : SpellCastCharge {
             }
         }
         handleData = Catalog.GetData<HandleData>(handleId);
+
+        spawnEffectData = Catalog.GetData<EffectData>(spawnEffectId);
+        retrieveEffectData = Catalog.GetData<EffectData>(retrieveEffectId);
         ModOptions.Setup();
     }
 
@@ -366,6 +375,12 @@ public class SpellCastBlade : SpellCastCharge {
         if (!activeBlade) return;
 
         if (currentCharge < 1) {
+            hasReachedFullCharge = false;
+            activeBlade.MoveTo(new MoveTarget(MoveMode.Joint, handJointLerp)
+                .Parent(spellCaster.magicSource)
+                .AtWorld(HandPosition, HandRotation));
+        } else if (!hasReachedFullCharge) {
+            hasReachedFullCharge = true;
             activeBlade.MoveTo(new MoveTarget(MoveMode.Joint, handJointLerp)
                 .Parent(spellCaster.magicSource)
                 .AtWorld(HandPosition, HandRotation));
@@ -404,6 +419,11 @@ public class SpellCastBlade : SpellCastCharge {
         blade.item.RefreshCollision();
         blade.Quiver = quiver;
         blade.item.lastHandler = spellCaster.ragdollHand;
+        if (isNew) {
+            spawnEffectData?.Spawn(spellCaster.magicSource).Play();
+        } else {
+            retrieveEffectData?.Spawn(spellCaster.magicSource).Play();
+        }
 
         if (isNew) {
             activeBlade.transform.localScale = Vector3.zero;

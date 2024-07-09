@@ -181,9 +181,7 @@ public class Quiver : ThunderBehaviour {
     public bool AddToQuiver(Blade blade, bool randomIndex = false) {
         if (!blade
             || blade == null
-            || blades.Contains(blade)
-            || !creature.TryGetVariable(SkillCrownOfKnives.HasCrown, out bool hasCrown)
-            || !hasCrown) return false;
+            || blades.Contains(blade)) return false;
 
         if (IsFull) {
             if (!TryGetClosestFreeHolster(blade, out var holder) || !blade.TryDepositIn(holder)) return false;
@@ -196,6 +194,8 @@ public class Quiver : ThunderBehaviour {
             blade.StopGuidance();
             return true;
         }
+
+        if (!creature.TryGetVariable(SkillCrownOfKnives.HasCrown, out bool hasCrown) || !hasCrown) return false;
 
         if (randomIndex)
             blades.Insert(Random.Range(0, blades.Count), blade);

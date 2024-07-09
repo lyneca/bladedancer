@@ -35,11 +35,15 @@ public class SkillFiresGuidance : SpellSkillData {
     [ModOptionSlider, ModOption("Fire's Guidance Haptic Max Angle", "Duration over which guidance 'kicks in' after throw")]
     public static float hapticAngleAmount;
 
+    public string throwEffectId;
+    protected EffectData throwEffectData;
+
     public string grabEffectId;
     protected EffectData grabEffectData;
     public override void OnCatalogRefresh() {
         base.OnCatalogRefresh();
         spellHashId = Animator.StringToHash(spellId.ToLower());
+        throwEffectData = Catalog.GetData<EffectData>(throwEffectId);
         grabEffectData = Catalog.GetData<EffectData>(grabEffectId);
     }
 
@@ -101,6 +105,7 @@ public class SkillFiresGuidance : SpellSkillData {
         if (blade == null) return;
         blade.OnGuidanceStop -= Throw;
         if (ungrab && blade.item.isFlying && blade.guidanceHand is RagdollHand hand && hand.Velocity().magnitude > SpellCaster.throwMinHandVelocity) {
+            throwEffectData?.Spawn(blade.transform.position, blade.transform.rotation).Play();
             blade.AddForce(hand.Velocity() * throwForce, ForceMode.VelocityChange, true, true);
         }
     }

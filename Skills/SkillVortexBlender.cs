@@ -19,6 +19,17 @@ public class SkillVortexBlender : SpellBladeMergeData {
     protected float spinAmount = 0;
     protected float spinMult = 1;
 
+    public string vortexEffectId;
+    public EffectData vortexEffectData;
+    
+    protected EffectInstance vortexEffect;
+    protected Quaternion slowRotation;
+
+    public override void OnCatalogRefresh() {
+        base.OnCatalogRefresh();
+        vortexEffectData = Catalog.GetData<EffectData>(vortexEffectId);
+    }
+
     public override void Load(Mana mana) {
         base.Load(mana);
         centerPoint = new GameObject().transform;
@@ -36,11 +47,29 @@ public class SkillVortexBlender : SpellBladeMergeData {
 
     public override void OnMergeStart(Quiver quiver) {
         base.OnMergeStart(quiver);
+        
         quiver.preventBlock.Add(this);
         quiver.ignoreCap.Add(this);
         quiver.target = centerPoint;
         // quiver.lookDirection = Vector3.forward;
         quiver.SetMode(Mode.Blender, true);
+        vortexEffect?.End();
+        vortexEffect = vortexEffectData.Spawn(mana.mergePoint);
+        vortexEffect.Play();
+        
+        var forwardDir = Vector3.Slerp(mana.casterLeft.ragdollHand.PointDir, mana.casterRight.ragdollHand.PointDir,
+            0.5f);
+        var rightDir = mana.casterRight.ragdollHand.transform.position - mana.casterLeft.ragdollHand.transform.position;
+        var upDir = Vector3.Cross(rightDir, forwardDir);
+        slowRotation = Quaternion.LookRotation(upDir,
+            Quaternion.AngleAxis(spinAmount, upDir)
+            * Vector3.ProjectOnPlane(Player.currentCreature.ragdoll.targetPart.transform.forward, upDir));
+    }
+
+    public override void OnMergeEnd(Quiver quiver) {
+        base.OnMergeEnd(quiver);
+        vortexEffect?.End();
+        vortexEffect = null;
     }
 
     public override void Unload() {
@@ -48,6 +77,7 @@ public class SkillVortexBlender : SpellBladeMergeData {
         if (!Quiver.TryGet(mana.creature, out var quiver)) return;
         quiver.preventBlock.Remove(this);
         quiver.ignoreCap.Remove(this);
+        vortexEffect?.End();
     }
 
     public override void OnTryBladeSpawn(Quiver quiver) {
@@ -64,9 +94,11 @@ public class SkillVortexBlender : SpellBladeMergeData {
     public override void Update() {
         base.Update();
         if (!mana.mergeActive) return;
+
         spinMult = Mathf.Lerp(1, 2,
             Mathf.InverseLerp(0.15f, 0.05f,
                 (mana.casterLeft.transform.position - mana.casterRight.transform.position).magnitude));
+
         spinAmount += spinSpeed * spinMult * Time.deltaTime;
         var forwardDir = Vector3.Slerp(mana.casterLeft.ragdollHand.PointDir, mana.casterRight.ragdollHand.PointDir,
             0.5f);
@@ -78,5 +110,9 @@ public class SkillVortexBlender : SpellBladeMergeData {
             Quaternion.LookRotation(upDir,
                 Quaternion.AngleAxis(spinAmount, upDir)
                 * Vector3.ProjectOnPlane(Player.currentCreature.ragdoll.targetPart.transform.forward, upDir)));
+
+        slowRotation = Quaternion.Slerp(slowRotation, centerPoint.transform.rotation, Time.deltaTime);
+        vortexEffect?.SetIntensity(Mathf.InverseLerp(0, 30,
+            Quaternion.Angle(slowRotation, centerPoint.transform.rotation)));
     }
 }

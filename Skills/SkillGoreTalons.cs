@@ -69,12 +69,20 @@ public class SkillGoreTalons : SkillSpellPunch {
     public static float talonMaxForce;
 
     protected static bool refreshing;
+    
+    public string startEffectId;
+    protected EffectData startEffectData;
 
     public const string TalonList = "TalonList";
     public const string TalonActive = "TalonActive";
 
     public static Rigidbody[] gripObjects = new Rigidbody[2];
     public static Joint[] joints = new Joint[2];
+
+    public override void OnCatalogRefresh() {
+        base.OnCatalogRefresh();
+        startEffectData = Catalog.GetData<EffectData>(startEffectId);
+    }
 
     public override void OnSkillLoaded(SkillData skillData, Creature creature) {
         base.OnSkillLoaded(skillData, creature);
@@ -133,6 +141,7 @@ public class SkillGoreTalons : SkillSpellPunch {
 
         if (active && talons.Count == talonCount) return;
         refreshing = true;
+        int startCount = talons.Count;
 
         for (var i = 0; i < talons.Count; i++) {
             if (!talons[i]) continue;
@@ -174,6 +183,9 @@ public class SkillGoreTalons : SkillSpellPunch {
             talons.Add(blade);
         }
 
+        if (startCount == 0 && talons.Count > 0) {
+            startEffectData?.Spawn(hand.ragdollHand.caster.magicSource).Play();
+        }
         refreshing = false;
     }
 

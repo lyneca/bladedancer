@@ -41,11 +41,17 @@
         <Reference Include="ThunderRoad">
           <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\ThunderRoad.dll</HintPath>
         </Reference>
+        <Reference Include="ThunderRoad.MaterialInstance">
+          <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\ThunderRoad.MaterialInstance.dll</HintPath>
+        </Reference>
         <Reference Include="UnityEngine">
           <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.dll</HintPath>
         </Reference>
         <Reference Include="UnityEngine.AnimationModule">
           <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.AnimationModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.AudioModule">
+          <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.AudioModule.dll</HintPath>
         </Reference>
         <Reference Include="UnityEngine.CoreModule">
           <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
@@ -65,6 +71,7 @@
         <Compile Include="Golem\GolemBladeRain.cs" />
         <Compile Include="Golem\GolemBladeStorm.cs" />
         <Compile Include="Golem\GolemAbilityLoader.cs" />
+        <Compile Include="Misc\ItemModuleCustomCrystal.cs" />
         <Compile Include="Misc\CustomLoreAdder.cs" />
         <Compile Include="SecretSpawner.cs" />
         <Compile Include="Blade.cs" />

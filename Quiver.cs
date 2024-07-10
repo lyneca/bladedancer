@@ -60,6 +60,7 @@ public class Quiver : ThunderBehaviour {
 
     public delegate void CountChangeEvent(Quiver quiver);
     public event CountChangeEvent OnCountChangeEvent;
+    public event CountChangeEvent OnAvailableSpace;
 
     public delegate void BladeEvent(Quiver quiver, Blade blade);
     public event BladeEvent OnBladeAddEvent;
@@ -180,13 +181,14 @@ public class Quiver : ThunderBehaviour {
 
     public bool AddToQuiver(Blade blade, bool randomIndex = false) {
         if (!blade
-            || blade == null
-            || blades.Contains(blade)) return false;
+            || blade == null) return false;
+
+        if (blades.Contains(blade)) return true;
 
         if (IsFull) {
             if (!TryGetClosestFreeHolster(blade, out var holder) || !blade.TryDepositIn(holder)) return false;
             blade.Quiver = this;
-            blade.OnAddToQuiver(this);
+            blade.InvokeAddToQuiver(this);
             blade.AllowDespawn(false);
             blade.SetTouch(false);
             blade.item.StopFlying();
@@ -206,7 +208,7 @@ public class Quiver : ThunderBehaviour {
         }
 
         blade.Quiver = this;
-        blade.OnAddToQuiver(this);
+        blade.InvokeAddToQuiver(this);
         blade.AllowDespawn(false);
         blade.SetTouch(false);
         blade.item.StopFlying();
@@ -255,7 +257,7 @@ public class Quiver : ThunderBehaviour {
         if (inventory)
             blade.IgnoreItem(inventory);
         
-        blade.OnRemoveFromQuiver(this);
+        blade.InvokeRemoveFromQuiver(this);
         blade.ScaleInstantly(ScaleMode.FullSize);
 
         if (!blades.Remove(blade)) return false;
@@ -332,14 +334,17 @@ public class Quiver : ThunderBehaviour {
         return RemoveFromQuiver(blade, refresh);
     }
 
-    public bool TryGetClosestBlade(Vector3 position, out Blade blade, ItemData.Type? preferredType = null) {
+    public bool TryGetClosestBlade(Vector3 position, out Blade blade, ItemData.Type? preferredType = null, bool defaultOnly = false) {
         float distance = Mathf.Infinity;
         List<Blade> bladesToCheck = null;
 
-        if (preferredType != null) {
+        if (preferredType != null || defaultOnly) {
             bladesToCheck = new List<Blade>();
             for (var i = 0; i < blades.Count; i++) {
-                if (blades[i].item.data.type == preferredType) {
+                if (defaultOnly) {
+                    if (blades[i].isDefaultBlade)
+                        bladesToCheck.Add(blades[i]);
+                } else if (blades[i].item.data.type == preferredType) {
                     bladesToCheck.Add(blades[i]);
                 }
             }
@@ -470,6 +475,7 @@ public class Quiver : ThunderBehaviour {
 
         if (changed) {
             OnCountChangeEvent?.Invoke(this);
+            if (!IsFull) OnAvailableSpace?.Invoke(this);
         }
     }
 

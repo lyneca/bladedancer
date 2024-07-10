@@ -64,6 +64,7 @@ public class SpellBladeMergeData : SpellMergeData {
     /// </summary>
     public virtual void OnMergeEnd([CanBeNull] Quiver quiver) {
         started = false;
+        currentCharge = 0;
         quiver?.ignoreSelf.Remove(this);
         SkillDoubleTrouble.InvokeOnMergeEnd(this);
     }

@@ -119,6 +119,8 @@ public class SpellCastBlade : SpellCastCharge {
 
     public Quiver quiver;
 
+    public BoolHandler disableHandle;
+
     public string spawnEffectId = "SpawnBlade";
     public EffectData spawnEffectData;
     public string retrieveEffectId = "RetrieveBlade";
@@ -149,6 +151,9 @@ public class SpellCastBlade : SpellCastCharge {
 
     public override void Load(SpellCaster spellCaster) {
         base.Load(spellCaster);
+        
+        disableHandle = new BoolHandler(false);
+        disableHandle.OnChangeEvent += DisableHandleChanged;
 
         anchor = new GameObject().transform;
         anchor.transform.SetParent(spellCaster.ragdollHand.transform);
@@ -174,11 +179,21 @@ public class SpellCastBlade : SpellCastCharge {
         }
 
         orgImbueTriggerCallback = spellCaster.imbueTrigger.callBack;
-
         spellCaster.imbueTrigger.SetCallback(OnTriggerImbue);
+
         root = Step.Start();
         SetupModifiers();
         Init();
+    }
+
+    private void DisableHandleChanged(bool oldValue, bool newValue) {
+        if (handle == null) return;
+        
+        // If the handle doesn't want to be active as per the spell, return
+        if (!handleActive) return;
+        handle.SetTouch(!newValue);
+        if (newValue)
+            handle.Release();
     }
 
     public void Init() {
@@ -211,10 +226,10 @@ public class SpellCastBlade : SpellCastCharge {
                 if (spellCaster.imbueObjects[i].colliderGroup == colliderGroup) return;
             }
 
-            // Add ColliderGroup to list
             var item = colliderGroup.gameObject.GetComponentInParent<Item>();
+            if (item.TryGetComponent<Blade>(out var blade) && blade.isDefaultBlade) return;
 
-            if (item.TryGetComponent<Blade>(out _)) return;
+            // Add ColliderGroup to list
             spellCaster.imbueObjects.Add(new SpellCaster.ImbueObject(colliderGroup));
         } else {
             // Remove ColliderGroup to list
@@ -267,6 +282,14 @@ public class SpellCastBlade : SpellCastCharge {
     public override void Fire(bool active) {
         if (active && spellCaster.ragdollHand.grabbedHandle) return;
         base.Fire(active);
+
+        if (imbueEnabled) {
+            spellCaster.imbueTrigger.SetRadius(imbueRadius);
+        } else {
+            spellCaster.imbueTrigger.SetRadius(0);
+            spellCaster.imbueTrigger.SetActive(false);
+        }
+
         if (active) {
             bool wasFreeCharge = FreeCharge;
             if (FreeCharge) {
@@ -419,6 +442,8 @@ public class SpellCastBlade : SpellCastCharge {
         blade.item.RefreshCollision();
         blade.Quiver = quiver;
         blade.item.lastHandler = spellCaster.ragdollHand;
+        blade.item.OnDespawnEvent += ActiveBladeDespawn;
+
         if (isNew) {
             spawnEffectData?.Spawn(spellCaster.magicSource).Play();
         } else {
@@ -436,29 +461,95 @@ public class SpellCastBlade : SpellCastCharge {
             .Parent(spellCaster.magicSource)
             .AtWorld(HandPosition, HandRotation));
         OnBladeSpawnEvent?.Invoke(this, blade);
+        return;
+
+        void ActiveBladeDespawn(EventTime time) {
+            blade.item.OnDespawnEvent -= ActiveBladeDespawn;
+            if (activeBlade == blade && activeBlade != null) {
+                Fire(false);
+            }
+        }
     }
+
 
     // IMBUE
     public override void Load(Imbue imbue) {
         base.Load(imbue);
         Init();
         if (imbue.colliderGroup.collisionHandler?.item is not Item item) return;
-        if (item.gameObject.GetComponent<Blade>() != null) return;
-        if (imbue.spellCastBase?.spellCaster?.imbueObjects is List<SpellCaster.ImbueObject> objects) {
-            for (var i = 0; i < objects.Count; i++) {
-                if (objects[i].colliderGroup?.collisionHandler?.item != item) continue;
-                objects.RemoveAt(i);
-                return;
+
+        imbue.SetEnergyInstant(imbue.maxEnergy);
+
+        var blade = item.gameObject.GetOrAddComponent<Blade>();
+        blade.Quiver = quiver;
+        blade.isDefaultBlade = false;
+        blade.AllowDespawn(true);
+        for (var i = spellCaster.imbueObjects.Count - 1; i >= 0; i--) {
+            if (imbue.spellCastBase.spellCaster.imbueObjects[i].colliderGroup?.collisionHandler?.item is Item
+                    collidingItem
+                && collidingItem == blade.item) {
+                if (imbue.spellCastBase.spellCaster.spellInstance is SpellCastBlade imbuingSpell)
+                    imbuingSpell.OnTriggerImbue(imbue.colliderGroup.colliders[0], false);
+                break;
             }
         }
+        if (blade.item.IsFree) {
+            if (quiver.IsFull) {
+                if (quiver.TryGetClosestBlade(item.transform.position, out Blade replacement, null, true)) replacement.Release();
+            }
 
-        var blade = item.gameObject.AddComponent<Blade>();
-        blade.Quiver = quiver;
-        blade.canFullDespawn = false;
-        blade.AllowDespawn(true);
-        Debug.Log($"Going to quiver {quiver}");
-        if (blade.item.IsFree) blade.ReturnToQuiver(quiver, true);
+            if (blade.ReturnToQuiver(quiver, true)) return;
+        } else if (blade.item.mainHandler != null) {
+            blade.item.OnUngrabEvent += UnGrab;
+            return;
+        }
+
+        quiver.OnAvailableSpace += AvailableSpace;
+        blade.OnAddToQuiver += AddToQuiver;
+        blade.item.OnDespawnEvent += Despawn;
+        return;
+
+        void UnGrab(Handle _, RagdollHand __, bool ___) {
+            blade.item.OnUngrabEvent -= UnGrab;
+            if (blade.item.IsFree && !blade.item.isCulled) {
+                if (quiver.IsFull) {
+                    if (quiver.TryGetClosestBlade(item.transform.position, out var replacement, null, true))
+                        replacement.Release();
+                }
+
+                if (blade.ReturnToQuiver(quiver, true)) return;
+            }
+
+            quiver.OnAvailableSpace += AvailableSpace;
+            blade.OnAddToQuiver += AddToQuiver;
+        }
+
+        void AvailableSpace(Quiver _) {
+            if (!blade.IsFree) return;
+            quiver.OnAvailableSpace -= AvailableSpace;
+            blade.OnAddToQuiver -= AddToQuiver;
+            blade.item.OnDespawnEvent -= Despawn;
+            blade.item.OnUngrabEvent -= UnGrab;
+            blade.ReturnToQuiver(quiver);
+        }
+
+        void AddToQuiver(Blade _, Quiver __) {
+            quiver.OnAvailableSpace -= AvailableSpace;
+            blade.OnAddToQuiver -= AddToQuiver;
+            blade.item.OnDespawnEvent -= Despawn;
+            blade.item.OnUngrabEvent -= UnGrab;
+        }
+
+        void Despawn(EventTime time) {
+            if (time == EventTime.OnEnd) return;
+
+            blade.item.OnDespawnEvent -= Despawn;
+            blade.item.OnUngrabEvent -= UnGrab;
+            quiver.OnAvailableSpace -= AvailableSpace;
+            blade.OnAddToQuiver -= AddToQuiver;
+        }
     }
+
 
     public override void Throw(Vector3 velocity) {
         base.Throw(velocity);
@@ -479,6 +570,8 @@ public class SpellCastBlade : SpellCastCharge {
         }
 
         spellCaster.ragdollHand.playerHand?.controlHand.HapticPlayClip(Catalog.gameData.haptics.bowShoot);
+        
+        throwEffectData?.Spawn(spellCaster.magicSource).Play();
 
         activeBlade.OnlyIgnoreRagdoll(spellCaster.mana.creature.ragdoll, true);
         activeBlade.AddForce(velocity * throwForce, ForceMode.VelocityChange, aimAssist, true, spellCaster.ragdollHand);

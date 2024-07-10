@@ -31,7 +31,7 @@ public class SkillGoreTalons : SkillSpellPunch {
     public static float talonForward;
     
     [SkillCategory("Gore Talons", Category.Base | Category.Body, 1), ModOptionOrder(1)]
-    [ModOptionFloatValuesDefault(60, 180, 30, 120)]
+    [ModOptionFloatValuesDefault(120, 360, 30, 180)]
     [ModOptionSlider, ModOption("Talon Spread Angle", "Angle which the talons are spread over.")]
     public static float talonAngle;
 
@@ -148,8 +148,8 @@ public class SkillGoreTalons : SkillSpellPunch {
             talons[i].OnPenetrate -= OnPenetrate;
             talons[i].OnUnPenetrate -= OnPenetrate;
             talons[i].isDangerous.Remove(this);
-            talons[i].CancelMovement(true);
-            talons[i].ReturnToQuiver(Quiver.Main);
+            if (!talons[i].ReturnToQuiver(Quiver.Main))
+                talons[i].Release();
         }
 
         talons.Clear();
@@ -167,7 +167,7 @@ public class SkillGoreTalons : SkillSpellPunch {
                 break;
             blade.isDangerous.Add(this);
             var position
-                = Quaternion.AngleAxis((i - (count - 1) / 2f) * (talonAngle / (count - 1)), pointDir)
+                = Quaternion.AngleAxis((i - (count - 1) / 2f) * (talonAngle / count), pointDir)
                   * palmDir
                   * -talonDistance
                   + pointDir * talonForward;
@@ -185,7 +185,15 @@ public class SkillGoreTalons : SkillSpellPunch {
 
         if (startCount == 0 && talons.Count > 0) {
             startEffectData?.Spawn(hand.ragdollHand.caster.magicSource).Play();
+            if (hand.ragdollHand.caster.spellInstance is SpellCastBlade spell) {
+                spell.disableHandle.Add(this);
+            }
+        } else if (startCount > 0 && talons.Count == 0) {
+            if (hand.ragdollHand.caster.spellInstance is SpellCastBlade spell) {
+                spell.disableHandle.Remove(this);
+            }
         }
+
         refreshing = false;
     }
 

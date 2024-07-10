@@ -174,13 +174,18 @@ public class RotarySlingshot : ThunderBehaviour {
         if (time == EventTime.OnStart) {
             if (spell.activeBlade) blades.Add(spell.activeBlade);
             spell.ReleaseBlade();
+            if (spell.spellCaster.other.spellInstance is SpellCastBlade otherSpell) {
+                otherSpell.disableHandle.Add(this);
+            }
             onGrabHasRun = true;
             Refresh();
         } else {
+            if (spell.spellCaster.other.spellInstance is SpellCastBlade otherSpell) {
+                otherSpell.disableHandle.Remove(this);
+            }
             onGrabHasRun = false;
             var vector = FireVector;
             if (vector.magnitude > skill.minFireMagnitude) {
-                skill.fireAllEffectData?.Spawn(spell.spellCaster.transform).Play();
                 for (int i = blades.Count - 1; i >= 0; i--) {
                     var blade = blades[i];
                     Fire(blade, vector, false);
@@ -189,6 +194,7 @@ public class RotarySlingshot : ThunderBehaviour {
                 if (blades.Count > 0) {
                     spell.spellCaster.other.ragdollHand.playerHand.controlHand.HapticPlayClip(Catalog.gameData.haptics
                         .bowShoot);
+                    skill.fireAllEffectData?.Spawn(spell.spellCaster.transform).Play();
 
                     this.RunAfter(() => { spell.spellCaster.ragdollHand.HapticTick(0.6f); },
                         Mathf.Lerp(0.0f, 0.05f, DrawAmount));

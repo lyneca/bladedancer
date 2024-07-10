@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Bladedancer.Skills;
 using ThunderRoad;
@@ -9,6 +10,7 @@ using ThunderRoad.Skill;
 using ThunderRoad.Skill.Spell;
 using UnityEngine;
 using UnityEngine.Serialization;
+using Debug = UnityEngine.Debug;
 
 namespace Bladedancer; 
 
@@ -33,9 +35,14 @@ public class Blade : ThunderBehaviour {
     public event PenetrationDelegate OnPenetrate;
     public event PenetrationDelegate OnUnPenetrate;
 
+    public delegate void QuiverEvent(Blade blade, Quiver quiver);
+
+    public event QuiverEvent OnAddToQuiver;
+    public event QuiverEvent OnRemoveFromQuiver;
+
     protected float freeStartTime;
     protected bool hasResetAfterFree;
-    public bool canFullDespawn = true;
+    public bool isDefaultBlade = true;
 
     public override ManagedLoops EnabledManagedLoops => ManagedLoops.Update | ManagedLoops.FixedUpdate;
     
@@ -124,7 +131,6 @@ public class Blade : ThunderBehaviour {
            && item.loaded
            && item.isUsed
            && item.transform
-           && Player.local
            && !float.IsNaN(item.transform.position.x)
            && !float.IsNaN(item.transform.position.y)
            && !float.IsNaN(item.transform.position.z)
@@ -233,6 +239,7 @@ public class Blade : ThunderBehaviour {
 
     public void OnDespawn(EventTime time) {
         if (time != EventTime.OnStart) return;
+        item.OnDespawnEvent -= OnDespawn;
         all.Remove(this);
         if (wasSlung)
             OnSlingEnd?.Invoke(this);
@@ -251,6 +258,7 @@ public class Blade : ThunderBehaviour {
         OnlyIgnoreRagdoll(newQuiver.creature.ragdoll, true);
         for (var i = 0; i < item.imbues.Count; i++) {
             var imbue = item.imbues[i];
+            if (imbue.spellCastBase is SpellCastBlade blade) continue;
             if (newQuiver.creature.HasSkill(imbue.spellCastBase)) {
                 imbue.imbueCreature ??= newQuiver.creature;
                 imbue.imbueCreature.mana.InvokeOnImbueUnload(imbue.spellCastBase, imbue);
@@ -275,14 +283,16 @@ public class Blade : ThunderBehaviour {
         moveTargetDirty = true;
     }
 
-    public void OnAddToQuiver(Quiver quiver) {
+    public void InvokeAddToQuiver(Quiver quiver) {
         SetMoltenArc(false);
         SetIsMetal(false);
+        OnAddToQuiver?.Invoke(this, quiver);
     }
 
-    public void OnRemoveFromQuiver(Quiver quiver) {
+    public void InvokeRemoveFromQuiver(Quiver quiver) {
         SetMoltenArc(true);
         SetIsMetal(true);
+        OnRemoveFromQuiver?.Invoke(this, quiver);
     }
 
     public void SetMoltenArc(bool active) {
@@ -434,6 +444,7 @@ public class Blade : ThunderBehaviour {
     public bool ReturnToQuiver(Quiver quiver, bool force = false) {
         transform.localScale = Vector3.one;
         StartCoroutine(UnSling());
+        AllowDespawn(false);
         item.StopThrowing();
         item.StopFlying();
         item.lastHandler = quiver.creature.handRight;
@@ -497,7 +508,7 @@ public class Blade : ThunderBehaviour {
             && ReturnToQuiver(quiver)) return;
 
         // Couldn't add to quiver, despawn this blade
-        if (canFullDespawn) Despawn();
+        if (isDefaultBlade) Despawn();
         else {
             StartDespawn();
         }
@@ -519,6 +530,60 @@ public class Blade : ThunderBehaviour {
 
     protected override void ManagedUpdate() {
         base.ManagedUpdate();
+
+        if (!IsValid) {
+            Debug.LogError($"WARNING: Blade {this} no longer valid! See following logs for diagnosis.");
+            Debug.Log("ALL of the following need to be true:");
+            try {
+                Debug.Log($"- (bool)item: {(bool)item}\n"
+                          + $"- item.loaded: {item.loaded}\n"
+                          + $"- item.isUsed: {item.isUsed}\n"
+                          + $"- (bool)item.transform: {(bool)item.transform}\n"
+                          + $"- !float.IsNaN(item.transform.position.x): {!float.IsNaN(item.transform.position.x)}\n"
+                          + $"- !float.IsNaN(item.transform.position.y): {!float.IsNaN(item.transform.position.y)}\n"
+                          + $"- !float.IsNaN(item.transform.position.z): {!float.IsNaN(item.transform.position.z)}\n"
+                          + $"- !float.IsInfinity(item.transform.position.x): {!float.IsInfinity(item.transform.position.x)}\n"
+                          + $"- !float.IsInfinity(item.transform.position.y): {!float.IsInfinity(item.transform.position.y)}\n"
+                          + $"- !float.IsInfinity(item.transform.position.z): {!float.IsInfinity(item.transform.position.z)}\n"
+                          + $"- (item.transform.position - Player.local.transform.position).sqrMagnitude < 500 * 500: {(item.transform.position - Player.local.transform.position).sqrMagnitude < 500 * 500}");
+            } catch (Exception e) {
+                Debug.Log("Could not check validity conditions due to exception. Wait, how did we get here?");
+                Debug.LogException(e);
+            }
+            
+            Debug.Log($"My movetarget is {moveTarget}.");
+            if (moveTarget is MoveTarget nonNullTarget) {
+                Debug.Log($"- mode: {nonNullTarget.mode}");
+                Debug.Log($"- parent: {nonNullTarget.parent}");
+                Debug.Log($"- speed: {nonNullTarget.speed}");
+                Debug.Log($"- pos: {nonNullTarget.Get.position}");
+                Debug.Log($"- rot: {nonNullTarget.Get.rotation}");
+            }
+            
+            try {
+                Debug.Log($"My position is {transform.position} and my rotation is {transform.rotation}");
+            } catch (Exception e) {
+                Debug.LogWarning("Could not get transform due to error:");
+                Debug.LogException(e);
+            }
+            try {
+                Debug.Log($"My velocity is {item.physicBody.velocity}");
+            } catch (Exception e) {
+                Debug.LogWarning("Could not get velocity due to error:");
+                Debug.LogException(e);
+            }
+            try {
+                Debug.Log($"Here are the components on me: {string.Join(", ", gameObject.GetComponents<Component>().Select(component => component.GetType().Name))}");
+            } catch (Exception e) {
+                Debug.LogWarning("Could not get active components due to error:");
+                Debug.LogException(e);
+            }
+            // Debug.Log("Now I shall commit seppuku for the health of the game. Goodnight, sweet prince...");
+            // Despawn();
+        }
+
+        if (!item.loaded) return;
+        
         if (showMoveDebug && moveTarget is MoveTarget target) {
             Viz.Lines(this).Color(target.mode switch {
                 MoveMode.Joint => Color.red,

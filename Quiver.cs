@@ -27,6 +27,7 @@ public class Quiver : ThunderBehaviour {
     public Vector3 lookDirection;
 
     public static FloatHandler GetMaxCountHandler(Creature creature) {
+        if (creature == null) return null;
         if (creature.TryGetVariable(MaxCount, out FloatHandler handler))
             return handler;
         handler = new FloatHandler(baseQuiverCount);
@@ -184,8 +185,9 @@ public class Quiver : ThunderBehaviour {
             || blade == null) return false;
 
         if (blades.Contains(blade)) return true;
+        bool quiverEnabled = creature.TryGetVariable(SkillCrownOfKnives.HasCrown, out bool hasCrown) && hasCrown;
 
-        if (IsFull) {
+        if (IsFull || !quiverEnabled) {
             if (!TryGetClosestFreeHolster(blade, out var holder) || !blade.TryDepositIn(holder)) return false;
             blade.Quiver = this;
             blade.InvokeAddToQuiver(this);
@@ -196,8 +198,6 @@ public class Quiver : ThunderBehaviour {
             blade.StopGuidance();
             return true;
         }
-
-        if (!creature.TryGetVariable(SkillCrownOfKnives.HasCrown, out bool hasCrown) || !hasCrown) return false;
 
         if (randomIndex)
             blades.Insert(Random.Range(0, blades.Count), blade);
@@ -462,9 +462,8 @@ public class Quiver : ThunderBehaviour {
 
         var newQuiver = new List<Blade>();
         for (var i = 0; i < blades.Count; i++) {
-            if (blades[i] != null && blades[i].gameObject != null) {
-                newQuiver.Add(blades[i]);
-            }
+            if (blades[i] == null || blades[i].gameObject == null) continue;
+            newQuiver.Add(blades[i]);
         }
 
         blades = newQuiver;
@@ -473,10 +472,18 @@ public class Quiver : ThunderBehaviour {
             blades[i].OnlyIgnoreRagdoll(creature.ragdoll);
         }
 
+        RefreshUI();
+
         if (changed) {
             OnCountChangeEvent?.Invoke(this);
             if (!IsFull) OnAvailableSpace?.Invoke(this);
         }
+    }
+
+    public void RefreshUI() {
+        if (!creature.isPlayer) return;
+        creature.handLeft.wristStats.transform.GetOrAddComponent<CustomWristStats>().Refresh(this);
+        creature.handRight.wristStats.transform.GetOrAddComponent<CustomWristStats>().Refresh(this);
     }
 
     public bool FireAtCreature(Creature creature) {

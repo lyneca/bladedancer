@@ -22,11 +22,12 @@ public class Blade : ThunderBehaviour {
     public static List<Blade> despawning = new();
 
     public Dictionary<ColliderGroup, bool> isMetal;
-
     public delegate void BladeDelegate(Blade blade);
     public delegate void HitEntity(Blade blade, ThunderEntity entity, CollisionInstance hit);
     public event HitEntity OnHitEntity;
     public event BladeDelegate OnSlingEnd;
+    public event BladeDelegate OnDespawn;
+    public event BladeDelegate OnImbuesChanged;
 
     public delegate void GuidanceDelegate(Blade blade, bool ungrab);
     public event GuidanceDelegate OnGuidanceStop;
@@ -156,6 +157,8 @@ public class Blade : ThunderBehaviour {
             var blade = item.GetOrAddComponent<Blade>();
             item.transform.rotation
                 = rotation * Quaternion.Inverse(item.transform.InverseTransformRotation(item.flyDirRef.rotation));
+            if (!SpellCastBlade.allowRangedExpert)
+                blade.item.data.flags &= ~ItemFlags.Piercing;
             callback(blade, true);
         }, position, rotation);
     }
@@ -181,7 +184,7 @@ public class Blade : ThunderBehaviour {
         item.OnGrabEvent += OnGrab;
         item.OnUngrabEvent += OnUnGrab;
         item.OnFlyEndEvent += OnFlyEnd;
-        item.OnDespawnEvent += OnDespawn;
+        item.OnDespawnEvent += OnItemDespawn;
         item.OnImbuesChangeEvent += OnImbuesChange;
         item.mainCollisionHandler.OnCollisionStartEvent += OnCollisionStart;
         item.DisallowDespawn = true;
@@ -228,6 +231,7 @@ public class Blade : ThunderBehaviour {
 
     private void OnImbuesChange() {
         SetMoltenArc(!InQuiver);
+        OnImbuesChanged?.Invoke(this);
     }
 
     private void OnCollisionStart(CollisionInstance hit) {
@@ -237,9 +241,10 @@ public class Blade : ThunderBehaviour {
         }
     }
 
-    public void OnDespawn(EventTime time) {
+    public void OnItemDespawn(EventTime time) {
         if (time != EventTime.OnStart) return;
-        item.OnDespawnEvent -= OnDespawn;
+        OnDespawn?.Invoke(this);
+        item.OnDespawnEvent -= OnItemDespawn;
         all.Remove(this);
         if (wasSlung)
             OnSlingEnd?.Invoke(this);
@@ -605,6 +610,7 @@ public class Blade : ThunderBehaviour {
 
     protected override void ManagedFixedUpdate() {
         base.ManagedFixedUpdate();
+        if (item == null || !item.loaded) return;
         Move();
 
         if (InQuiver)
@@ -857,6 +863,23 @@ public class Blade : ThunderBehaviour {
         jointActive = enabled;
     }
 
+    public Quaternion ForwardRotation {
+        get {
+            if (item.flyDirRef) {
+                var lookDir = Quaternion.LookRotation(item.flyDirRef.forward, item.transform.GetUnitAxis(smallestAxis));
+                return lookDir;
+            }
+
+            if (item.holderPoint) {
+                return item.transform.rotation
+                       * Quaternion.Inverse(item.transform.InverseTransformRotation(item.holderPoint.rotation
+                           * Quaternion.AngleAxis(180, Vector3.up)));
+            }
+
+            return Quaternion.LookRotation(item.transform.up, item.transform.forward);
+        }
+    }
+
     public void CreateJoint() {
         var targetBody = moveTarget?.jointBody ?? jointTarget;
         
@@ -987,7 +1010,7 @@ public class Blade : ThunderBehaviour {
         if (aimAssist) {
             var ray = new Ray(position, force);
             if (AimAssist(ray, 20, 30, out var targetPoint, Filter.EnemyOf(item.lastHandler?.creature),
-                    CreatureType.Animal | CreatureType.Golem | CreatureType.Human) is Creature creature) {
+                    CreatureType.Animal | CreatureType.Golem | CreatureType.Human)) {
                 force = (targetPoint.position - transform.position).normalized * force.magnitude;
             }
         }

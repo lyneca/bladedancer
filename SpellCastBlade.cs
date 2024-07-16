@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using Bladedancer.Skills;
+using HarmonyLib;
 using SequenceTracker;
 using ThunderRoad;
 using ThunderRoad.Skill.Spell;
@@ -17,6 +18,10 @@ public class SpellCastBlade : SpellCastCharge {
 
     public string handleId = "ObjectHandleLight";
     public HandleData handleData;
+    
+    [SkillCategory("General")]
+    [ModOption("Allow Ranged Expert", "Whether to allow Ranged Expert to function with blades summoned by this mod. It can be buggy.", defaultValueIndex = 0)]
+    public static bool allowRangedExpert;
 
     [SkillCategory("General")]
     [ModOptionSlider, ModOptionFloatValuesDefault(5, 20, 5, 10)]
@@ -79,6 +84,7 @@ public class SpellCastBlade : SpellCastCharge {
     [ModOption("Gravity Force Compensation", "Force multiplier when throwing a Gravity-imbued blade using Slingblade")]
     public static float gravityForceCompensation;
 
+    
     public static bool aimAssist = false;
     public bool stealIfNearby;
 
@@ -134,6 +140,10 @@ public class SpellCastBlade : SpellCastCharge {
 
     public override void OnCatalogRefresh() {
         base.OnCatalogRefresh();
+
+        var harmony = new Harmony("com.lyneca.bladedancer");
+        harmony.PatchAll();
+        
         Blade.itemData = Catalog.GetData<ItemData>(defaultBladeId);
         Quiver.allowedQuiverItemHashIds = new List<int>();
         if (allowedQuiverItemIds is not null) {
@@ -273,10 +283,10 @@ public class SpellCastBlade : SpellCastCharge {
 
     public bool FreeCharge {
         get => spellCaster
-               && spellCaster.ragdollHand.creature.TryGetVariable(SkillLethalReturn.FreeCharge,
+               && spellCaster.ragdollHand.creature.TryGetVariable(SkillCaputMortuum.FreeCharge,
                    out bool freeCharge)
                && freeCharge;
-        set => spellCaster.ragdollHand.creature.SetVariable(SkillLethalReturn.FreeCharge, value);
+        set => spellCaster.ragdollHand.creature.SetVariable(SkillCaputMortuum.FreeCharge, value);
     }
 
     public override void Fire(bool active) {
@@ -302,6 +312,7 @@ public class SpellCastBlade : SpellCastCharge {
             lastThrownBlade?.StopGuidance();
             lastThrownBlade = null;
             readyHaptic = false;
+            hasReachedFullCharge = false;
             if (stealIfNearby
                 && Blade.TryGetClosestSlungInRadius(spellCaster.magicSource.position, SkillKnifethief.grabRadius,
                     out var closest, quiver)) {
@@ -422,6 +433,7 @@ public class SpellCastBlade : SpellCastCharge {
                 spellCaster.ragdollHand.Grab(bladeHandle,
                     bladeHandle.GetNearestOrientation(spellCaster.ragdollHand.grip, spellCaster.ragdollHand.side), 0,
                     true);
+                blade.item.IgnoreRagdollCollision(spellCaster.ragdollHand.ragdoll, spellCaster.ragdollHand.type);
                 return;
             }
 

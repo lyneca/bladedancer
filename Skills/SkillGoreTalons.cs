@@ -104,6 +104,7 @@ public class SkillGoreTalons : SkillSpellPunch {
 
     public IEnumerator OnFistRoutine(PlayerHand hand, bool gripping) {
         yield return new WaitForEndOfFrame();
+        if (hand == null || hand.ragdollHand == null) yield break;
         if (hand.ragdollHand.grabbedHandle != null) yield break;
         if (!Quiver.TryGet(hand.ragdollHand?.creature, out var quiver)) yield break;
         Player.currentCreature.SetVariable(TalonActive + hand.side, gripping);

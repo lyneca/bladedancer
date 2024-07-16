@@ -34,15 +34,28 @@
         <WarningLevel>4</WarningLevel>
     </PropertyGroup>
     <ItemGroup>
+        <Reference Include="0Harmony">
+          <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\StreamingAssets\Mods\Bladedancer\0Harmony.dll</HintPath>
+        </Reference>
+        <Reference Include="IngameDebugConsole.Runtime">
+          <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\IngameDebugConsole.Runtime.dll</HintPath>
+        </Reference>
+        <Reference Include="mscorlib" />
         <Reference Include="System"/>
         <Reference Include="System.Core"/>
         <Reference Include="System.Data"/>
+        <Reference Include="System.ValueTuple, Version=4.0.3.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+          <HintPath>packages\System.ValueTuple.4.5.0\lib\net47\System.ValueTuple.dll</HintPath>
+        </Reference>
         <Reference Include="System.Xml"/>
         <Reference Include="ThunderRoad">
           <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\ThunderRoad.dll</HintPath>
         </Reference>
         <Reference Include="ThunderRoad.MaterialInstance">
           <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\ThunderRoad.MaterialInstance.dll</HintPath>
+        </Reference>
+        <Reference Include="Unity.ResourceManager">
+          <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\Unity.ResourceManager.dll</HintPath>
         </Reference>
         <Reference Include="UnityEngine">
           <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.dll</HintPath>
@@ -71,6 +84,8 @@
         <Compile Include="Golem\GolemBladeRain.cs" />
         <Compile Include="Golem\GolemBladeStorm.cs" />
         <Compile Include="Golem\GolemAbilityLoader.cs" />
+        <Compile Include="Misc\CustomWristStats.cs" />
+        <Compile Include="Misc\Patches.cs" />
         <Compile Include="Misc\ItemModuleCustomCrystal.cs" />
         <Compile Include="Misc\CustomLoreAdder.cs" />
         <Compile Include="SecretSpawner.cs" />
@@ -100,7 +115,7 @@
         <Compile Include="Skills\SkillDoubleTrouble.cs" />
         <Compile Include="Skills\SkillForceBlades.cs" />
         <Compile Include="Skills\SkillGoreTalons.cs" />
-        <Compile Include="Skills\SkillLethalReturn.cs" />
+        <Compile Include="Skills\SkillCaputMortuum.cs" />
         <Compile Include="Skills\SkillPeripheralBlock.cs" />
         <Compile Include="Skills\SkillRotarySlingshot.cs" />
         <Compile Include="Skills\SkillSeekerTwin.cs" />
@@ -110,6 +125,10 @@
         <Compile Include="Skills\SkillVortexBlender.cs" />
         <Compile Include="SpellCastBlade.cs" />
         <Compile Include="Properties\AssemblyInfo.cs"/>
+    </ItemGroup>
+    <ItemGroup>
+      <None Include="App.config" />
+      <None Include="packages.config" />
     </ItemGroup>
     <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets"/>
     <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

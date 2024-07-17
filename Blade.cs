@@ -107,6 +107,7 @@ public class Blade : ThunderBehaviour {
     public static bool showMoveDebug;
 
     private float retrieveDelay;
+    private bool vizEnabled;
 
     public Quiver Quiver {
         get => _quiver;
@@ -217,8 +218,7 @@ public class Blade : ThunderBehaviour {
         RegisterPenetrationEvents();
         
         isDangerous = new BoolHandler(false);
-        jointTarget = new GameObject().AddComponent<Rigidbody>();
-        jointTarget.isKinematic = true;
+        EnsureJointTarget();
         shouldRetrieve = true;
         item.ForceLayer(LayerName.MovingItem);
         pid = new RBPID(item.physicBody.rigidBody, forceMode: SpellCastBlade.pidForceMode,
@@ -255,8 +255,10 @@ public class Blade : ThunderBehaviour {
 
     public void OnDestroy() {
         all.Remove(this);
-        if (jointTarget)
+        if (jointTarget) {
             Destroy(jointTarget.gameObject);
+            jointTarget = null;
+        }
     }
 
     private void SetOwner(Quiver newQuiver) {
@@ -590,6 +592,7 @@ public class Blade : ThunderBehaviour {
         if (!item.loaded) return;
         
         if (showMoveDebug && moveTarget is MoveTarget target) {
+            vizEnabled = true;
             Viz.Lines(this).Color(target.mode switch {
                 MoveMode.Joint => Color.red,
                 MoveMode.PID => Color.blue,
@@ -599,7 +602,8 @@ public class Blade : ThunderBehaviour {
             if (target.jointBody != null) {
                 Viz.Dot(this, target.jointBody.transform.position);
             }
-        } else {
+        } else if (vizEnabled) {
+            vizEnabled = false;
             Viz.Lines(this).Hide();
             Viz.Dot(this, transform.position).Hide();
         }
@@ -721,6 +725,7 @@ public class Blade : ThunderBehaviour {
     }
 
     public void Move() {
+        EnsureJointTarget();
         if (MoveTarget is not { Get: (position: var position, rotation: var rotation) } target) {
             SetJoint(false);
             SetIntangible(false);
@@ -829,16 +834,18 @@ public class Blade : ThunderBehaviour {
                                            * target.speed;
                 break;
             case MoveMode.PID:
-                // pid.Update(position, rotation * Quaternion.Inverse(item.transform.InverseTransformRotation(item.flyDirRef.rotation)),
-                //     target.speed);
-
                 pid.Update(position,
                     rotation
-                    * Quaternion.Inverse(item.transform.InverseTransformRotation(
-                        Quaternion.LookRotation(item.flyDirRef.forward, item.transform.GetUnitAxis(smallestAxis)))),
+                    * Quaternion.Inverse(item.transform.InverseTransformRotation(ForwardRotation)),
                     target.speed);
                 break;
         }
+    }
+
+    public void EnsureJointTarget() {
+        if (jointTarget != null) return;
+        jointTarget = new GameObject().AddComponent<Rigidbody>();
+        jointTarget.isKinematic = true;
     }
 
     public Vector3 ToTarget => moveTarget?.Get.position is Vector3 pos ? pos - item.Center : Vector3.zero;
@@ -881,7 +888,8 @@ public class Blade : ThunderBehaviour {
     }
 
     public void CreateJoint() {
-        var targetBody = moveTarget?.jointBody ?? jointTarget;
+        var targetBody = moveTarget?.jointBody ? moveTarget?.jointBody : jointTarget;
+        if (targetBody == null) return;
         
         var target = moveTarget.GetValueOrDefault();
         bool isCustomJoint = moveTarget != null && target.jointBody;
@@ -1009,9 +1017,17 @@ public class Blade : ThunderBehaviour {
 
         if (aimAssist) {
             var ray = new Ray(position, force);
-            if (AimAssist(ray, 20, 30, out var targetPoint, Filter.EnemyOf(item.lastHandler?.creature),
-                    CreatureType.Animal | CreatureType.Golem | CreatureType.Human)) {
-                force = (targetPoint.position - transform.position).normalized * force.magnitude;
+            Creature owner = null;
+            if (item.lastHandler != null)
+                owner = item.lastHandler.creature;
+            if (owner == null && Quiver != null)
+                owner = Quiver.creature;
+
+            if (owner != null) {
+                if (AimAssist(ray, 20, 30, out var targetPoint, Filter.EnemyOf(owner),
+                        CreatureType.Animal | CreatureType.Golem | CreatureType.Human)) {
+                    force = (targetPoint.position - transform.position).normalized * force.magnitude;
+                }
             }
         }
 

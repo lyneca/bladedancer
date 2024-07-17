@@ -98,7 +98,7 @@ public class CustomWristStats : ThunderBehaviour {
         for (var i = 0; i < meshes.Length; i++) {
             var mesh = meshes[i];
             var meshRenderer = mesh.GetComponent<MeshRenderer>();
-            if (!meshRenderer.enabled) continue;
+            if (meshRenderer == null || !meshRenderer.enabled) continue;
             var clone = new GameObject().AddComponent<MeshFilter>();
             clone.mesh = Instantiate(mesh.sharedMesh);
             clone.transform.SetParent(mesh.transform.parent);

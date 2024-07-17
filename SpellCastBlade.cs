@@ -138,11 +138,19 @@ public class SpellCastBlade : SpellCastCharge {
     private Trigger.CallBack orgImbueTriggerCallback;
     private bool hasReachedFullCharge;
 
+    public void Localize(string group, string text) {
+        Debug.Log($"{group}/{text}: \"{LocalizationManager.Instance.GetLocalizedString(group, text)}\"");
+    }
+
     public override void OnCatalogRefresh() {
         base.OnCatalogRefresh();
 
         var harmony = new Harmony("com.lyneca.bladedancer");
         harmony.PatchAll();
+
+        LocalizationManager.Instance.OnLanguageChanged(LocalizationManager.Instance.Language);
+        
+        IngameDebugConsole.DebugLogConsole.AddCommand("localize", "Localize a string", Localize);
         
         Blade.itemData = Catalog.GetData<ItemData>(defaultBladeId);
         Quiver.allowedQuiverItemHashIds = new List<int>();
@@ -569,17 +577,17 @@ public class SpellCastBlade : SpellCastCharge {
             velocity = Vector3.Slerp(velocity.normalized, spellCaster.mana.creature.ragdoll.headPart.transform.forward,
                            0.5f)
                        * velocity.magnitude;
+            foreach (var eachImbue in activeBlade.item.imbues) {
+                if (eachImbue.spellCastBase is not SpellCastGravity) continue;
+                velocity *= gravityForceCompensation;
+                break;
+            }
         } else {
             velocity *= aiThrowForce;
         }
 
         if (!activeBlade) return;
         activeBlade.transform.position = HandPosition;
-        foreach (var eachImbue in activeBlade.item.imbues) {
-            if (eachImbue.spellCastBase is not SpellCastGravity) continue;
-            velocity *= gravityForceCompensation;
-            break;
-        }
 
         spellCaster.ragdollHand.playerHand?.controlHand.HapticPlayClip(Catalog.gameData.haptics.bowShoot);
         
@@ -628,13 +636,4 @@ public class SpellCastBlade : SpellCastCharge {
             OnHitEntityEvent?.Invoke(this, blade, entity, hit);
         }
     }
-}
-
-public enum Mode {
-    Crown,
-    Slicer,
-    Rain,
-    Blender,
-    Volley,
-    VolleySpraying
 }

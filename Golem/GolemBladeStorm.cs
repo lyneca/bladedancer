@@ -38,7 +38,7 @@ public class GolemBladeStorm : GolemBladeAbility {
         blade.Release();
         Blade.slung.Add(blade);
         blade.wasSlung = true;
-        blade.AddForce(vector.normalized * Mathf.Lerp(25, 50, Mathf.InverseLerp(5, 10, vector.sqrMagnitude)),
+        blade.AddForce(vector.normalized * Mathf.Lerp(15, 30, Mathf.InverseLerp(5, 10, vector.sqrMagnitude)),
             ForceMode.VelocityChange, false, true);
         if (blade.item.GetComponent<Electromagnet>() is Electromagnet magnet)
             magnet.target = Player.currentCreature.ragdoll.targetPart.transform;

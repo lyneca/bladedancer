@@ -21,6 +21,10 @@ public class Quiver : ThunderBehaviour {
     [ModOptionSlider, ModOption("Crown Spread Angle", "Spread angle for daggers in the crown.")]
     public static float quiverSpread;
 
+    [SkillCategory("Crown of Knives", Category.Base, 2)]
+    [ModOptionSlider, ModOption("Crown Mode", "Visual appearance of the crown.")]
+    public static CrownMode crownMode;
+
     public Creature creature;
     public Mode mode;
     public Transform target;
@@ -44,7 +48,7 @@ public class Quiver : ThunderBehaviour {
 
 
     public bool IsFull => !ignoreCap && Count >= Max;
-    public int Max => Mathf.FloorToInt(MaxCountHandler);
+    public int Max => MaxCountHandler == null ? 0 : Mathf.FloorToInt(MaxCountHandler);
 
     public static Quiver Main => Player.currentCreature ? Player.currentCreature.GetOrAddComponent<Quiver>() : null;
     public static bool TryGet(Creature creature, out Quiver quiver) {
@@ -472,7 +476,12 @@ public class Quiver : ThunderBehaviour {
             blades[i].OnlyIgnoreRagdoll(creature.ragdoll);
         }
 
-        RefreshUI();
+        try {
+            RefreshUI();
+        } catch (NullReferenceException e) {
+            Debug.LogError("Exception when refreshing wrist quiver UI:");
+            Debug.LogException(e);
+        }
 
         if (changed) {
             OnCountChangeEvent?.Invoke(this);
@@ -524,6 +533,15 @@ public class Quiver : ThunderBehaviour {
         float half = (blades.Count - 1f) / 2;
         float offset = blades.Count == 1 ? 0 : (i - half) / half;
         switch (mode) {
+            case Mode.Crown when crownMode is CrownMode.Cape:
+            case Mode.Crown when creature.isPlayer && creature.currentLocomotion.isCrouched:
+                return new MoveTarget(MoveMode.PID, 12)
+                    .Parent(creature.ragdoll.targetPart.transform)
+                    .At(Quaternion.AngleAxis(offset * maxSpread, Vector3.forward)
+                        * new Vector3(0.1f, 0, -0.3f))
+                    .Scale(ScaleMode.Scaled)
+                    .LookAt(creature.ragdoll.headPart.transform, true);
+            case Mode.Crown when crownMode is CrownMode.Halo:
             case Mode.Crown when !creature.isPlayer && (creature.brain.isChoke || creature.IsBurning):
                 var burningPosition = Quaternion.AngleAxis(360f / count * i, Vector3.up)
                                    * new Vector3(0, 0.5f, 0.3f);
@@ -534,6 +552,7 @@ public class Quiver : ThunderBehaviour {
                     .LookAt(creature.ragdoll.targetPart.transform, true);
             case Mode.Crown when !creature.isPlayer && creature.ragdoll.state is Ragdoll.State.Destabilized or Ragdoll.State.Inert:
                 return null;
+            case Mode.Crown when crownMode is CrownMode.Sentries:
             case Mode.Crown when !creature.isPlayer && (creature.brain.isUnconscious || creature.brain.isIncapacitated):
                 return new MoveTarget(MoveMode.PID, 2)
                     .Parent(creature.ragdoll.targetPart.transform, false)
@@ -543,14 +562,7 @@ public class Quiver : ThunderBehaviour {
                         Quaternion.LookRotation(Vector3.down))
                     .Scale(ScaleMode.Scaled)
                     .LookAt(creature.brain.isIncapacitated ? Player.local.head.transform : null);
-            case Mode.Crown when creature.isPlayer && creature.currentLocomotion.isCrouched:
-                return new MoveTarget(MoveMode.PID, 12)
-                    .Parent(creature.ragdoll.targetPart.transform)
-                    .At(Quaternion.AngleAxis(offset * maxSpread, Vector3.forward)
-                        * new Vector3(0.1f, 0, -0.3f))
-                    .Scale(ScaleMode.Scaled)
-                    .LookAt(creature.ragdoll.headPart.transform, true);
-            case Mode.Crown:
+            case Mode.Crown when crownMode is CrownMode.Arc:
                 return new MoveTarget(MoveMode.PID, 6)
                     .Parent(creature.ragdoll.targetPart.transform)
                     .At(Quaternion.AngleAxis(offset * maxSpread, Vector3.forward)
@@ -615,3 +627,17 @@ public class Quiver : ThunderBehaviour {
     public static implicit operator Quiver(Creature creature) => Get(creature);
 }
 
+public enum CrownMode {
+    Arc,
+    Halo,
+    Cape,
+    Sentries
+}
+public enum Mode {
+    Crown,
+    Slicer,
+    Rain,
+    Blender,
+    Volley,
+    VolleySpraying
+}

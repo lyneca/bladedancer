@@ -104,10 +104,10 @@ public class GolemBladeAbility : GolemAbility {
 
         lastBladeSpawn = Time.time;
         Blade.Spawn(OnBladeSpawn, golem.headRenderer.transform.position + Vector3.up,
-            Quaternion.LookRotation(Vector3.up, golem.headRenderer.transform.forward), null, true);
+            Quaternion.LookRotation(Vector3.up, golem.headRenderer.transform.forward), null);
     }
 
-    public virtual void OnBladeSpawn(Blade blade, bool _) {
+    public virtual void OnBladeSpawn(Blade blade) {
         blades.Add(blade);
         blade.MaxImbue(spell, null, skills);
         for (var i = 0; i < golemColliders.Length; i++) {

@@ -4,7 +4,6 @@ using Bladedancer.Misc;
 using ThunderRoad;
 using ThunderRoad.Skill.Spell;
 using UnityEngine;
-using UnityEngine.PlayerLoop;
 
 namespace Bladedancer.Skills;
 
@@ -53,7 +52,7 @@ public class SkillBladestorm : SpellBladeMergeData {
         spraying = false;
         quiver.target = centerPoint;
         quiver.lookDirection = Vector3.forward;
-        quiver.SetMode(Mode.Slicer, true);
+        quiver.SetMode(Mode.Slicer);
     }
 
     public override void OnMergeEnd(Quiver quiver) {

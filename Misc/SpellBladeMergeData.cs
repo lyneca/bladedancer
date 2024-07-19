@@ -43,6 +43,7 @@ public class SpellBladeMergeData : SpellMergeData {
                     continue;
                 case SpellCastBlade blade:
                     blade.OnCastStop();
+                    blade.disableImbue.Add(this);
                     break;
                 default:
                     OnLoadOtherSpell(spell as SpellCastCharge);
@@ -50,7 +51,6 @@ public class SpellBladeMergeData : SpellMergeData {
             }
         }
 
-        quiver.ignoreSelf.Add(this);
         OnMergeStart(quiver);
         SkillDoubleTrouble.InvokeOnMergeStart(this);
         if (!retrieveOnStart) return;
@@ -65,7 +65,16 @@ public class SpellBladeMergeData : SpellMergeData {
     public virtual void OnMergeEnd([CanBeNull] Quiver quiver) {
         started = false;
         currentCharge = 0;
-        quiver?.ignoreSelf.Remove(this);
+
+        for (var i = 0; i < 2; i++) {
+            var spell = mana.GetCaster((Side)i).spellInstance;
+            switch (spell) {
+                case SpellCastBlade blade:
+                    blade.disableImbue.Remove(this);
+                    break;
+            }
+        }
+
         SkillDoubleTrouble.InvokeOnMergeEnd(this);
     }
 
@@ -83,6 +92,7 @@ public class SpellBladeMergeData : SpellMergeData {
         Vector3.Slerp(mana.casterLeft.ragdollHand.PointDir, mana.casterRight.ragdollHand.PointDir, 0.5f),
         Vector3.Slerp(mana.casterLeft.ragdollHand.ThumbDir, mana.casterRight.ragdollHand.ThumbDir, 0.5f));
     public virtual void OnTryBladeSpawn(Quiver quiver) {}
+
     public virtual void OnBladeSpawn(Quiver quiver, Blade blade) {}
 
     public virtual void OnMergeUpdate(Quiver quiver) {
@@ -101,10 +111,10 @@ public class SpellBladeMergeData : SpellMergeData {
             lastSpawn = Time.time;
             mana.casterLeft.ragdollHand.HapticTick();
             mana.casterRight.ragdollHand.HapticTick();
-            Blade.Spawn((spawnedBlade, _) => {
+            Blade.Spawn(spawnedBlade => {
                 spawnedBlade.ReturnToQuiver(quiver);
                 OnBladeSpawn(quiver, spawnedBlade);
-            }, mana.mergePoint.position, SpawnOrientation, mana.creature, true);
+            }, mana.mergePoint.position, SpawnOrientation, mana.creature);
         }
         OnMergeUpdate(quiver);
     }

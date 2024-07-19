@@ -52,7 +52,7 @@ public class SkillVortexBlender : SpellBladeMergeData {
         quiver.ignoreCap.Add(this);
         quiver.target = centerPoint;
         // quiver.lookDirection = Vector3.forward;
-        quiver.SetMode(Mode.Blender, true);
+        quiver.SetMode(Mode.Blender);
         vortexEffect?.End();
         vortexEffect = vortexEffectData.Spawn(mana.mergePoint);
         vortexEffect.Play();

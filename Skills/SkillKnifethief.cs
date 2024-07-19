@@ -5,7 +5,7 @@ namespace Bladedancer.Skills;
 
 public class SkillKnifethief : SpellSkillData {
     [SkillCategory("Knifethief", Category.Base | Category.Mind, 1)]
-    [ModOptionFloatValuesDefault(0.1f, 2f, 0.1f, 0.3f)]
+    [ModOptionFloatValuesDefault(0.1f, 2f, 0.1f, 0.7f)]
     [ModOptionSlider, ModOption("Knifethief Grab Radius", "Radius in which Knifethief allows you to steal thrown daggers.")]
     public static float grabRadius;
 

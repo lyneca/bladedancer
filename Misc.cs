@@ -136,6 +136,24 @@ public static class Fixes {
 
 
 public static class Extension {
+
+    public static Vector3 ForwardVector(this Item item) {
+        if (item.flyDirRef) {
+            return item.flyDirRef.forward;
+        }
+
+        if (item.holderPoint) {
+            return item.transform.rotation
+                   * Quaternion.Inverse(item.transform.InverseTransformRotation(item.holderPoint.rotation
+                       * Quaternion.AngleAxis(180, Vector3.up))) * Vector3.forward;
+        }
+
+        return item.transform.up;
+    }
+
+    public static ItemData GetBladeItemData(this Creature creature)
+        => creature.TryGetVariable(Blade.BladeItem, out ItemData data) ? data : Blade.defaultItemData;
+
     public static float GetAxis(this Vector3 vector, Axis axis) => axis switch {
         Axis.X => vector.x,
         Axis.Y => vector.y,

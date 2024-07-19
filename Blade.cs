@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
+
 using System.Linq;
 using Bladedancer.Skills;
 using ThunderRoad;
@@ -9,14 +9,17 @@ using ThunderRoad.DebugViz;
 using ThunderRoad.Skill;
 using ThunderRoad.Skill.Spell;
 using UnityEngine;
-using UnityEngine.Serialization;
 using Debug = UnityEngine.Debug;
 
 namespace Bladedancer; 
 
 public class Blade : ThunderBehaviour {
+    public const string ContainerName = "DeleteMeIfYouUninstallBladedancer";
+    public const string BladeItem = "BladeItem";
+    
     public Item item;
-    public static ItemData itemData;
+    public static string defaultBladeId;
+    public static ItemData defaultItemData;
     public static List<Blade> all = new();
     public static List<Blade> slung = new();
     public static List<Blade> despawning = new();
@@ -79,7 +82,6 @@ public class Blade : ThunderBehaviour {
     public ThunderEntity homingTarget;
     public Transform homingTargetPoint;
     public bool shouldRetrieve;
-    public BoolHandler isDangerous;
     public const int UntilHit = 0;
     private Quiver _quiver;
     public Quiver lastQuiver;
@@ -126,7 +128,46 @@ public class Blade : ThunderBehaviour {
     public Quiver OwningQuiver => Quiver ?? lastQuiver;
 
     public bool InQuiver => Quiver != null && Quiver.Has(this);
-    public bool Dangerous => isDangerous || (InQuiver && Quiver.isDangerous);
+    
+    public static void SetCustomBlade(string id) {
+        ClearCustomBlade();
+        Debug.Log("Setting custom blade");
+        Player.currentCreature.SetVariable(BladeItem, Catalog.GetData<ItemData>(id));
+        Player.characterData.AddToContainer(ContainerName, new CustomBladeContent(id));
+        Player.characterData.SaveAsync();
+    }
+    public static void ClearCustomBlade() {
+        Debug.Log("Clearing custom blade");
+        if (Player.characterData.TryGetContainer(ContainerName, out var contents)) {
+            for (var i = contents.Count - 1; i >= 0; i--) {
+                if (contents[i] is CustomBladeContent)
+                    contents.RemoveAt(i);
+            }
+        }
+        Player.currentCreature.SetVariable(BladeItem, Catalog.GetData<ItemData>(defaultBladeId));
+        Player.characterData.SaveAsync();
+    }
+    public static ItemData GetPlayerCustomBlade() {
+        Debug.Log("Attempting to get custom blade");
+        if (Player.characterData == null
+            || !Player.characterData.TryGetContainer(ContainerName, out var contents)) return null;
+        Debug.Log($"Found container with {contents.Count} entries");
+
+        for (var i = 0; i < contents.Count; i++) {
+            Debug.Log(contents[i]);
+            Debug.Log(contents[i].referenceID);
+            Debug.Log(Catalog.TryGetData(contents[i].referenceID, out ItemData _));
+            if (contents[i] is not CustomBladeContent bladeContent
+                || !Catalog.TryGetData(bladeContent.referenceID, out ItemData item)) continue;
+            Debug.Log($"Found item {item.id}");
+            return item;
+        }
+        Debug.Log("Could not find any items :(");
+
+        return null;
+    }
+
+
 
     public bool IsValid
         => item
@@ -140,27 +181,36 @@ public class Blade : ThunderBehaviour {
            && !float.IsInfinity(item.transform.position.y)
            && !float.IsInfinity(item.transform.position.z)
            && (item.transform.position - Player.local.transform.position).sqrMagnitude < 500 * 500;
-    
-    public static void Spawn(
+
+    public static void GetOrSpawn(
         Action<Blade, bool> callback,
         Vector3 position,
         Quaternion rotation,
-        Creature creature,
-        bool forceSpawn = false) {
-        if (!forceSpawn
-            && Quiver.TryGet(creature, out var quiver)
+        Creature creature) {
+        if (Quiver.TryGet(creature, out var quiver)
             && quiver.TryGetClosestBlade(position, out var quiverBlade)) {
             callback(quiverBlade, false);
             return;
         }
+        
+        Spawn(blade => callback(blade, true), position, rotation, creature);
+    }
+    public static void Spawn(
+        Action<Blade> callback,
+        Vector3 position,
+        Quaternion rotation,
+        Creature creature) {
+        if (creature == null || !creature.TryGetVariable(BladeItem, out ItemData data))
+            data = defaultItemData;
 
-        itemData.SpawnAsync(item => {
+        data.SpawnAsync(item => {
             var blade = item.GetOrAddComponent<Blade>();
             item.transform.rotation
                 = rotation * Quaternion.Inverse(item.transform.InverseTransformRotation(item.flyDirRef.rotation));
+            blade.item.SetOwner(Item.Owner.None);
             if (!SpellCastBlade.allowRangedExpert)
                 blade.item.data.flags &= ~ItemFlags.Piercing;
-            callback(blade, true);
+            callback(blade);
         }, position, rotation);
     }
 
@@ -217,7 +267,6 @@ public class Blade : ThunderBehaviour {
         
         RegisterPenetrationEvents();
         
-        isDangerous = new BoolHandler(false);
         EnsureJointTarget();
         shouldRetrieve = true;
         item.ForceLayer(LayerName.MovingItem);
@@ -427,7 +476,6 @@ public class Blade : ThunderBehaviour {
 
     private IEnumerator UnSling() {
         if (!wasSlung) yield break;
-        isDangerous.Remove(UntilHit);
         yield return 0;
         OnSlingEnd?.Invoke(this);
         wasSlung = false;
@@ -465,8 +513,8 @@ public class Blade : ThunderBehaviour {
     }
 
     public bool TryDepositIn(Holder holder) {
-        if (InQuiver) Quiver.RemoveFromQuiver(this);
         if (!holder.ObjectAllowed(item) || !holder.HasSlotFree()) return false;
+        if (InQuiver) Quiver.RemoveFromQuiver(this);
         OnlyIgnoreRagdoll(Quiver.creature.ragdoll);
         MoveTo(new MoveTarget(MoveMode.PID, 6)
             .Parent(holder.transform)
@@ -701,12 +749,14 @@ public class Blade : ThunderBehaviour {
     /// When the timer runs out, the blade will attempt to return to its last quiver, or otherwise despawn.
     /// </remarks>
     /// <param name="allowRetrieve">Whether the blade should attempt to return to its quiver after the timer has run out</param>
-    public void Release(bool allowRetrieve = true, float retrieveDelay = -1) {
+    public void Release(bool allowRetrieve = true, float retrieveDelay = -1, bool resetScale = true) {
         CancelMovement();
         shouldRetrieve = allowRetrieve;
         item.data.drainImbueWhenIdle = true;
         AllowDespawn(true, retrieveDelay);
         SetTouch(true);
+        if (resetScale)
+            ScaleInstantly(ScaleMode.FullSize);
         item.Throw();
         item.lastHandler ??= Player.currentCreature.handLeft;
     }
@@ -761,6 +811,7 @@ public class Blade : ThunderBehaviour {
                     if (target.scaleInstantly) {
                         transform.localScale = Vector3.one * scaleRatio;
                         item.physicBody.mass = scaledMass;
+                        finishedScaling = true;
                         // item.customCenterOfMass = orgCustomCenterOfMass * scaleRatio;
                     } else {
                         transform.localScale = Vector3.Lerp(transform.localScale, Vector3.one * scaleRatio,
@@ -782,6 +833,7 @@ public class Blade : ThunderBehaviour {
                     if (target.scaleInstantly) {
                         transform.localScale = Vector3.one;
                         item.physicBody.mass = orgMass;
+                        finishedScaling = true;
                         // item.customCenterOfMass = orgCustomCenterOfMass;
                     } else {
                         transform.localScale = Vector3.Lerp(transform.localScale, Vector3.one,

@@ -84,6 +84,15 @@ public class SpellCastBlade : SpellCastCharge {
     [ModOption("Gravity Force Compensation", "Force multiplier when throwing a Gravity-imbued blade using Slingblade")]
     public static float gravityForceCompensation;
 
+    [SkillCategory("Staff Slam", Category.Base, 1)]
+    [ModOptionSlider, ModOptionIntValuesDefault(1, 12, 1, 6)]
+    [ModOption("Staff Slam Blade Count", "Number of blades fired when you slam the staff")]
+    public static int slamBladeCount;
+    
+    [SkillCategory("Staff Slam", Category.Base, 1)]
+    [ModOptionSlider, ModOptionFloatValuesDefault(1, 40, 1f, 20)]
+    [ModOption("Staff Slam Throw Force", "Force multiplier on blades summoned via staff slam")]
+    public static float slamThrowForce;
     
     public static bool aimAssist = false;
     public bool stealIfNearby;
@@ -97,7 +106,7 @@ public class SpellCastBlade : SpellCastCharge {
     public static bool handleEnabled;
     protected bool handleActive;
 
-    public Handle handle;
+    public Handle slingshotHandle;
 
     public delegate void HandleGrabEvent(SpellCastBlade spell, Handle handle, EventTime time);
     public event HandleGrabEvent OnHandleGrabEvent;
@@ -126,6 +135,7 @@ public class SpellCastBlade : SpellCastCharge {
     public Quiver quiver;
 
     public BoolHandler disableHandle;
+    public BoolHandler disableImbue;
 
     public string spawnEffectId = "SpawnBlade";
     public EffectData spawnEffectData;
@@ -142,6 +152,19 @@ public class SpellCastBlade : SpellCastCharge {
         Debug.Log($"{group}/{text}: \"{LocalizationManager.Instance.GetLocalizedString(group, text)}\"");
     }
 
+    public override void OnSkillLoaded(SkillData skillData, Creature creature) {
+        base.OnSkillLoaded(skillData, creature);
+        if (creature.isPlayer)
+            creature.SetVariable(Blade.BladeItem,
+                Blade.GetPlayerCustomBlade() ?? Catalog.GetData<ItemData>(defaultBladeId));
+    }
+
+    public override void OnSkillUnloaded(SkillData skillData, Creature creature) {
+        base.OnSkillUnloaded(skillData, creature);
+        if (creature.isPlayer)
+            creature.ClearVariable<ItemData>(Blade.BladeItem);
+    }
+
     public override void OnCatalogRefresh() {
         base.OnCatalogRefresh();
 
@@ -151,8 +174,9 @@ public class SpellCastBlade : SpellCastCharge {
         LocalizationManager.Instance.OnLanguageChanged(LocalizationManager.Instance.Language);
         
         IngameDebugConsole.DebugLogConsole.AddCommand("localize", "Localize a string", Localize);
-        
-        Blade.itemData = Catalog.GetData<ItemData>(defaultBladeId);
+
+        Blade.defaultBladeId = defaultBladeId;
+        Blade.defaultItemData = Catalog.GetData<ItemData>(defaultBladeId);
         Quiver.allowedQuiverItemHashIds = new List<int>();
         if (allowedQuiverItemIds is not null) {
             for (var i = 0; i < allowedQuiverItemIds.Count; i++) {
@@ -172,6 +196,9 @@ public class SpellCastBlade : SpellCastCharge {
         
         disableHandle = new BoolHandler(false);
         disableHandle.OnChangeEvent += DisableHandleChanged;
+        
+        disableImbue = new BoolHandler(false);
+        disableImbue.OnChangeEvent += DisableImbueChanged;
 
         anchor = new GameObject().transform;
         anchor.transform.SetParent(spellCaster.ragdollHand.transform);
@@ -180,20 +207,20 @@ public class SpellCastBlade : SpellCastCharge {
 
         if (spellCaster.mana.creature.isPlayer) {
             var obj = new GameObject().AddComponent<Rigidbody>().gameObject;
-            handle = obj.AddComponent<Handle>();
-            handle.physicBody.isKinematic = true;
-            handle.Load(handleData);
-            handle.data.localizationId = "ThisCanBeAnythingForSomeReason";
-            handle.data.highlightDefaultTitle = "Slingshot";
-            handle.data.highlightDefaultTitle = "Slingshot";
-            handle.handOverlapColliders = new List<Collider>();
-            handle.SetTouch(false);
-            handle.SetTelekinesis(false);
+            slingshotHandle = obj.AddComponent<Handle>();
+            slingshotHandle.physicBody.isKinematic = true;
+            slingshotHandle.Load(handleData);
+            slingshotHandle.data.localizationId = "ThisCanBeAnythingForSomeReason";
+            slingshotHandle.data.highlightDefaultTitle = "Slingshot";
+            slingshotHandle.data.highlightDefaultTitle = "Slingshot";
+            slingshotHandle.handOverlapColliders = new List<Collider>();
+            slingshotHandle.SetTouch(false);
+            slingshotHandle.SetTelekinesis(false);
             handleActive = false;
-            handle.allowedHandSide
+            slingshotHandle.allowedHandSide
                 = spellCaster.side == Side.Left ? Interactable.HandSide.Right : Interactable.HandSide.Left;
-            handle.Grabbed += OnHandleGrab;
-            handle.UnGrabbed += OnHandleUnGrab;
+            slingshotHandle.Grabbed += SlingshotHandleGrab;
+            slingshotHandle.UnGrabbed += SlingshotHandleUnGrab;
         }
 
         orgImbueTriggerCallback = spellCaster.imbueTrigger.callBack;
@@ -204,14 +231,19 @@ public class SpellCastBlade : SpellCastCharge {
         Init();
     }
 
+    private void DisableImbueChanged(bool oldValue, bool newValue) {
+        imbueEnabled = newValue;
+        spellCaster.imbueTrigger.SetRadius(imbueEnabled ? imbueRadius : 0);
+    }
+
     private void DisableHandleChanged(bool oldValue, bool newValue) {
-        if (handle == null) return;
+        if (slingshotHandle == null) return;
         
         // If the handle doesn't want to be active as per the spell, return
         if (!handleActive) return;
-        handle.SetTouch(!newValue);
+        slingshotHandle.SetTouch(!newValue);
         if (newValue)
-            handle.Release();
+            slingshotHandle.Release();
     }
 
     public void Init() {
@@ -260,14 +292,14 @@ public class SpellCastBlade : SpellCastCharge {
         }
     }
 
-    protected void OnHandleGrab(RagdollHand hand, Handle handle, EventTime time) {
+    protected void SlingshotHandleGrab(RagdollHand hand, Handle handle, EventTime time) {
         if (time == EventTime.OnStart) {
             handle.physicBody.isKinematic = false;
         } else {
             OnHandleGrabEvent?.Invoke(this, handle, EventTime.OnStart);
         }
     }
-    protected void OnHandleUnGrab(RagdollHand hand, Handle handle, EventTime time) {
+    protected void SlingshotHandleUnGrab(RagdollHand hand, Handle handle, EventTime time) {
         if (time == EventTime.OnStart) {
             handle.physicBody.isKinematic = true;
         } else {
@@ -284,9 +316,9 @@ public class SpellCastBlade : SpellCastCharge {
             spellCaster.ragdollHand.ragdoll.forcePhysic.Remove(this);
         }
 
-        if (!handle) return;
-        Object.Destroy(handle);
-        handle = null;
+        if (!slingshotHandle) return;
+        Object.Destroy(slingshotHandle);
+        slingshotHandle = null;
     }
 
     public bool FreeCharge {
@@ -315,6 +347,12 @@ public class SpellCastBlade : SpellCastCharge {
                 AddModifier(this, Modifier.ChargeSpeed, 100);
             }
 
+            if (quiver.Count == 0
+                && (!Quiver.holsterWhenCrouched
+                    || !quiver.creature.currentLocomotion.isCrouched
+                    || !quiver.creature.currentLocomotion.isGrounded))
+                quiver.FillFromHolsters();
+
             if (quiver.Count > 0)
                 AddModifier(this, Modifier.ChargeSpeed, 20);
             lastThrownBlade?.StopGuidance();
@@ -326,12 +364,14 @@ public class SpellCastBlade : SpellCastCharge {
                     out var closest, quiver)) {
                 closest.item.StopFlying();
                 closest.item.StopThrowing();
-                closest.isDangerous.Remove(Blade.UntilHit);
                 currentCharge = 1;
                 OnBladeSpawn(closest, false);
             } else {
-                Blade.Spawn(OnBladeSpawn, HandPosition, HandRotation, spellCaster.mana.creature,
-                    !Quiver.Get(spellCaster.mana.creature).IsFull && wasFreeCharge);
+                if (wasFreeCharge) {
+                    Blade.Spawn(blade => OnBladeSpawn(blade, true), HandPosition, HandRotation, spellCaster.mana.creature);
+                } else {
+                    Blade.GetOrSpawn(OnBladeSpawn, HandPosition, HandRotation, spellCaster.mana.creature);
+                }
             }
         } else {
             root.Reset();
@@ -340,9 +380,9 @@ public class SpellCastBlade : SpellCastCharge {
     }
 
     public void OnCastStop(bool skipQuiver = false) {
-        if (handle) {
-            handle.Release();
-            handle.SetTouch(false);
+        if (slingshotHandle) {
+            slingshotHandle.Release();
+            slingshotHandle.SetTouch(false);
             handleActive = false;
         }
 
@@ -399,12 +439,12 @@ public class SpellCastBlade : SpellCastCharge {
         base.UpdateCaster();
         OnSpellUpdateLoopEvent?.Invoke(this);
         root.Update();
-        if (handle && !handleActive && handleEnabled && currentCharge > throwMinCharge) {
-            handle.SetTouch(true);
+        if (slingshotHandle && !handleActive && handleEnabled && currentCharge > throwMinCharge) {
+            slingshotHandle.SetTouch(true);
             handleActive = true;
         }
 
-        if (handle && !handle.IsHanded()) handle.transform.position = spellCaster.magicSource.position;
+        if (slingshotHandle && !slingshotHandle.IsHanded()) slingshotHandle.transform.position = spellCaster.magicSource.position;
 
         if (lastThrownBlade
             && lastThrownBlade.guided
@@ -491,11 +531,14 @@ public class SpellCastBlade : SpellCastCharge {
         }
     }
 
-
     // IMBUE
     public override void Load(Imbue imbue) {
         base.Load(imbue);
         Init();
+        BringIntoCrown();
+    }
+
+    public void BringIntoCrown() {
         if (imbue.colliderGroup.collisionHandler?.item is not Item item) return;
 
         imbue.SetEnergyInstant(imbue.maxEnergy);
@@ -573,10 +616,12 @@ public class SpellCastBlade : SpellCastCharge {
 
     public override void Throw(Vector3 velocity) {
         base.Throw(velocity);
+        // velocity = spellCaster.ragdollHand.Velocity() + spellCaster.ragdollHand.creature.currentLocomotion.velocity;
         if (spellCaster.mana.creature.isPlayer) {
             velocity = Vector3.Slerp(velocity.normalized, spellCaster.mana.creature.ragdoll.headPart.transform.forward,
                            0.5f)
                        * velocity.magnitude;
+            if (!activeBlade || !activeBlade.item) return;
             foreach (var eachImbue in activeBlade.item.imbues) {
                 if (eachImbue.spellCastBase is not SpellCastGravity) continue;
                 velocity *= gravityForceCompensation;
@@ -588,6 +633,7 @@ public class SpellCastBlade : SpellCastCharge {
 
         if (!activeBlade) return;
         activeBlade.transform.position = HandPosition;
+        activeBlade.transform.rotation = HandRotation;
 
         spellCaster.ragdollHand.playerHand?.controlHand.HapticPlayClip(Catalog.gameData.haptics.bowShoot);
         
@@ -599,7 +645,6 @@ public class SpellCastBlade : SpellCastCharge {
         activeBlade.wasSlung = true;
         Blade.slung.Add(activeBlade);
         lastThrownBlade = activeBlade;
-        activeBlade.isDangerous.Add(Blade.UntilHit);
         activeBlade.OnSlingEnd -= OnSlingEnd;
         activeBlade.OnSlingEnd += OnSlingEnd;
         activeBlade.OnHitEntity -= OnHit;
@@ -635,5 +680,54 @@ public class SpellCastBlade : SpellCastCharge {
             blade.OnHitEntity -= OnHit;
             OnHitEntityEvent?.Invoke(this, blade, entity, hit);
         }
+    }
+
+    public override bool OnCrystalSlam(CollisionInstance hit) {
+        bool crystalSlammed = (imbue.colliderGroup.imbueShoot.position - hit.contactPoint).sqrMagnitude < 0.25;
+        float halfCount = slamBladeCount / 2f;
+        var creature = spellCaster?.mana.creature
+            ? spellCaster?.mana.creature 
+            : imbue.imbueCreature 
+                ? imbue.imbueCreature 
+                : imbue.colliderGroup.collisionHandler.item.lastHandler?.creature;
+        
+        RagdollPart headPart = imbue.colliderGroup.collisionHandler.item.lastHandler?.creature?.ragdoll?.headPart;
+        if (headPart && crystalSlammed) {
+            var toHitPoint = hit.contactPoint - headPart.transform.position;
+            for (int i = 0; i < slamBladeCount; i++) {
+                float normalizedRange = (i - halfCount) / halfCount;
+                Vector3 sideDir = Vector3.Cross(toHitPoint, hit.contactNormal);
+                Blade.Spawn(blade => {
+                        blade.Quiver = quiver;
+                        blade.Release(true, 1f);
+                        blade.item.lastHandler = headPart.ragdoll.creature.handLeft;
+                        var velocity = (Quaternion.AngleAxis(normalizedRange * 30, hit.contactNormal)
+                                        * toHitPoint.normalized
+                                        + hit.contactNormal)
+                                       * slamThrowForce;
+                        blade.AddForce(velocity, ForceMode.VelocityChange);
+                        quiver?.InvokeBladeThrow(blade);
+                    },
+                    headPart.transform.position + hit.contactNormal + sideDir * normalizedRange * 1f,
+                    Quaternion.LookRotation(toHitPoint, Vector3.up), creature);
+            }
+        } else {
+            var center = headPart ? headPart.transform.position + Vector3.up * 1f : hit.contactPoint + hit.contactNormal;
+            var up = headPart ? Vector3.up : hit.contactNormal;
+            for (int i = 0; i < slamBladeCount; i++) {
+                var vector = Quaternion.AngleAxis(360f / slamBladeCount * i, up)
+                             * Vector3.Cross(up, Vector3.forward).normalized;
+                Blade.Spawn(blade => {
+                    if (creature) {
+                        blade.Quiver = quiver;
+                        blade.item.lastHandler = imbue.colliderGroup.collisionHandler.item.lastHandler;
+                    }
+                    blade.AddForce(vector * slamThrowForce, ForceMode.VelocityChange);
+                    blade.Release(true, 1f);
+                }, center + vector * 0.5f, Quaternion.LookRotation(vector), creature);
+            }
+        }
+
+        return true;
     }
 }

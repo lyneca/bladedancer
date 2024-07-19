@@ -111,7 +111,7 @@ public class CustomWristStats : ThunderBehaviour {
             Imbue imbue = null;
             for (var j = 0; j < blade.item.colliderGroups.Count; j++) {
                 if (blade.item.colliderGroups[j].imbueEmissionRenderer == meshRenderer) {
-                    imbue = blade.item.colliderGroups[i].imbue;
+                    imbue = blade.item.colliderGroups[j].imbue;
                     break;
                 }
             }
@@ -130,7 +130,6 @@ public class CustomWristStats : ThunderBehaviour {
                     float change,
                     EventTime time) {
                     if (time == EventTime.OnEnd) {
-                        Debug.Log($"Imbue on {blade} changed to {spell}");
                         linker.Refresh();
                     }
                 }
@@ -171,7 +170,6 @@ public class ImbueEmissionLinker : ThunderBehaviour {
         var effects = imbue.spellCastBase.imbueEffect.effects;
         for (var i = 0; i < effects.Count; i++) {
             if (effects[i]?.module is EffectModuleShader shader) {
-                Debug.Log($"Setting color to {shader.mainColorEnd}");
                 target.material.SetColor(CustomWristStats.emissionPropertyID, shader.mainColorEnd);
                 return;
             }

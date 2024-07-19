@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using ThunderRoad;
+using ThunderRoad.DebugViz;
 using ThunderRoad.Skill;
 using UnityEngine;
 
@@ -76,14 +77,14 @@ public class RotarySlingshot : ThunderBehaviour {
     public bool onGrabHasRun;
 
     public bool Ready => spell != null
-                         && spell.handle != null
-                         && spell.handle.IsHanded()
+                         && spell.slingshotHandle != null
+                         && spell.slingshotHandle.IsHanded()
                          && spell.spellCaster != null
                          && spell.quiver != null
                          && onGrabHasRun;
 
     public float DrawAmount => Mathf.InverseLerp(0, SkillRotarySlingshot.drawLength,
-        (spell.spellCaster.magicSource.position - spell.handle.transform.position).magnitude);
+        (spell.spellCaster.magicSource.position - spell.slingshotHandle.transform.position).magnitude);
 
     public int TargetBladeCount => Ready
         ? Mathf.RoundToInt(DrawAmount * spell.quiver.Max)
@@ -94,26 +95,26 @@ public class RotarySlingshot : ThunderBehaviour {
         this.skill = skill;
         anchor = new GameObject().transform;
         anchor.transform.SetPositionAndRotation(spell.spellCaster.ragdollHand.transform.position,
-            Quaternion.LookRotation(spell.spellCaster.magicSource.position - spell.handle.transform.position,
+            Quaternion.LookRotation(spell.spellCaster.magicSource.position - spell.slingshotHandle.transform.position,
                 spell.spellCaster.ragdollHand.ThumbDir));
         blades = new List<Blade>();
         spell.OnHandleGrabEvent -= OnHandleGrab;
         spell.OnHandleGrabEvent += OnHandleGrab;
-        spell.handle.OnHeldActionEvent -= OnHeldAction;
-        spell.handle.OnHeldActionEvent += OnHeldAction;
+        spell.slingshotHandle.OnHeldActionEvent -= OnHeldAction;
+        spell.slingshotHandle.OnHeldActionEvent += OnHeldAction;
     }
 
     public void End() {
         onGrabHasRun = false;
         spell.OnHandleGrabEvent -= OnHandleGrab;
-        if (spell.handle)
-            spell.handle.OnHeldActionEvent -= OnHeldAction;
+        if (spell.slingshotHandle)
+            spell.slingshotHandle.OnHeldActionEvent -= OnHeldAction;
     }
     
     public Vector3 FireVector {
         get {
             var handleVector = spell.spellCaster.magicSource.position
-                               - spell.handle.transform.position;
+                               - spell.slingshotHandle.transform.position;
             return Vector3.Slerp(handleVector.normalized, spell.spellCaster.ragdollHand.PointDir, 0.5f)
                    * handleVector.magnitude;
         }
@@ -130,7 +131,7 @@ public class RotarySlingshot : ThunderBehaviour {
         if (blades.Count == target) return;
 
         var needsRefresh = false;
-        if (blades.Count < target && spell.quiver.TryGetClosestBlade(spell.spellCaster.transform.position, out var blade)) {
+        if (blades.Count < target && spell.quiver.TryGetClosestBlade(spell.spellCaster.transform.position, out var blade, scale: false)) {
             skill.snickEffectData?.Spawn(spell.spellCaster.magicSource).Play();
             blades.Add(blade);
             needsRefresh = true;
@@ -160,11 +161,12 @@ public class RotarySlingshot : ThunderBehaviour {
                               * new Vector3(0, 0.15f, 0.05f);
         return new MoveTarget(MoveMode.PID, 12)
             .Parent(anchor)
-            .At(rotatedPosition, Quaternion.LookRotation(Vector3.forward, -rotatedPosition));
+            .At(rotatedPosition,
+                Quaternion.LookRotation(Vector3.forward, Quaternion.AngleAxis(90, Vector3.forward) * -rotatedPosition))
+            .Scale(ScaleMode.Scaled);
     }
 
     public void Fire(Blade blade, Vector3 velocity, bool single) {
-        blade.isDangerous.Add(Blade.UntilHit);
         float mult = single ? SkillRotarySlingshot.quickFireVelocity : SkillRotarySlingshot.velocityMultiplier;
         blade.Release();
         blade.AddForce(velocity * mult, ForceMode.VelocityChange, false, true);

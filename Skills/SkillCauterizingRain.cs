@@ -48,7 +48,6 @@ public class SkillCauterizingRain : SpellBladeMergeData {
             else {
                 if (!quiver.TryGetBlade(out var blade, false)) continue;
                 blade.Release(false);
-                blade.isDangerous.Add(Blade.UntilHit);
                 blade.AddForce(
                     (blade.transform.position - quiver.creature.ragdoll.headPart.transform.position).normalized
                     * 15f, ForceMode.VelocityChange, false, true);
@@ -63,7 +62,7 @@ public class SkillCauterizingRain : SpellBladeMergeData {
         base.OnMergeStart(quiver);
         quiver.target = centerPoint;
         quiver.lookDirection = Vector3.forward;
-        quiver.SetMode(Mode.Rain, true);
+        quiver.SetMode(Mode.Rain);
     }
 
     public override Quaternion SpawnOrientation => Quaternion.LookRotation(Vector3.up,

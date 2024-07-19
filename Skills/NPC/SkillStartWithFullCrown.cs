@@ -18,10 +18,9 @@ public class SkillStartWithFullCrown : AISkillData {
     public IEnumerator FillCrown(Quiver quiver) {
         while (quiver.creature && !quiver.creature.isKilled && quiver && !quiver.IsFull) {
             yield return new WaitForSeconds(spawnDelay);
-            Blade.Spawn((blade, _) => blade.ReturnToQuiver(quiver, true),
+            Blade.Spawn(blade => blade.ReturnToQuiver(quiver, true),
                 quiver.creature.ragdoll.targetPart.transform.position + Vector3.up,
-                Quaternion.LookRotation(Vector3.up, quiver.creature.ragdoll.targetPart.transform.forward),
-                quiver.creature, true);
+                Quaternion.LookRotation(Vector3.up, quiver.creature.ragdoll.targetPart.transform.forward), quiver.creature);
         }
     }
 }

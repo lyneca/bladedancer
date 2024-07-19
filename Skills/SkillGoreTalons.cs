@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using ThunderRoad;
 using ThunderRoad.Skill.Spell;
 using UnityEngine;
-using Object = UnityEngine.Object;
 
 namespace Bladedancer.Skills; 
 
@@ -148,7 +147,6 @@ public class SkillGoreTalons : SkillSpellPunch {
             if (!talons[i]) continue;
             talons[i].OnPenetrate -= OnPenetrate;
             talons[i].OnUnPenetrate -= OnPenetrate;
-            talons[i].isDangerous.Remove(this);
             if (!talons[i].ReturnToQuiver(Quiver.Main))
                 talons[i].Release();
         }
@@ -159,6 +157,10 @@ public class SkillGoreTalons : SkillSpellPunch {
             refreshing = false;
             return;
         }
+        
+        if (Quiver.Main.Count < talonCount)
+            Quiver.Main.FillFromHolsters();
+        
         int count = Math.Min(Quiver.Main.Count, talonCount);
         var pointDir = hand.ragdollHand.transform.InverseTransformDirection(hand.ragdollHand.PointDir).normalized;
         var palmDir = hand.ragdollHand.transform.InverseTransformDirection(hand.ragdollHand.PalmDir).normalized;
@@ -166,7 +168,6 @@ public class SkillGoreTalons : SkillSpellPunch {
         for (var i = 0; i < count; i++) {
             if (!Quiver.Main.TryGetClosestBlade(hand.ragdollHand.transform.position, out var blade))
                 break;
-            blade.isDangerous.Add(this);
             var position
                 = Quaternion.AngleAxis((i - (count - 1) / 2f) * (talonAngle / count), pointDir)
                   * palmDir

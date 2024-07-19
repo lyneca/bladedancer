@@ -41,6 +41,9 @@
           <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\IngameDebugConsole.Runtime.dll</HintPath>
         </Reference>
         <Reference Include="mscorlib" />
+        <Reference Include="Newtonsoft.Json">
+          <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\Newtonsoft.Json.dll</HintPath>
+        </Reference>
         <Reference Include="System"/>
         <Reference Include="System.Core"/>
         <Reference Include="System.Data"/>
@@ -53,6 +56,9 @@
         </Reference>
         <Reference Include="ThunderRoad.MaterialInstance">
           <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\ThunderRoad.MaterialInstance.dll</HintPath>
+        </Reference>
+        <Reference Include="Unity.Addressables">
+          <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\Unity.Addressables.dll</HintPath>
         </Reference>
         <Reference Include="Unity.ResourceManager">
           <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\Unity.ResourceManager.dll</HintPath>
@@ -84,7 +90,9 @@
         <Compile Include="Golem\GolemBladeRain.cs" />
         <Compile Include="Golem\GolemBladeStorm.cs" />
         <Compile Include="Golem\GolemAbilityLoader.cs" />
+        <Compile Include="Misc\CustomBladeContent.cs" />
         <Compile Include="Misc\CustomWristStats.cs" />
+        <Compile Include="Misc\ItemModuleBladeSelector.cs" />
         <Compile Include="Misc\Patches.cs" />
         <Compile Include="Misc\ItemModuleCustomCrystal.cs" />
         <Compile Include="Misc\CustomLoreAdder.cs" />
@@ -98,6 +106,7 @@
         <Compile Include="PID.cs" />
         <Compile Include="Quiver.cs" />
         <Compile Include="SequenceTracker.cs" />
+        <Compile Include="Skills\NPC\SkillCustomBlade.cs" />
         <Compile Include="Skills\NPC\SkillImbueBlades.cs" />
         <Compile Include="Skills\NPC\SkillStartWithFullCrown.cs" />
         <Compile Include="Skills\SkillArchersGavotte.cs" />

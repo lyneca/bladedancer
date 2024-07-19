@@ -5,4 +5,4 @@ A mod implementing a full new skill tree to Blade and Sorcery, attempting to be 
 This repository is public to serve as a reference for other modders to create their own skill trees.
 
 ## Please note
-The existence of this repository or its licence do NOT permit you to upload or reupload this mod without my permission, as has happened before. While the code is covered by GPLv3, the JSON configuration file and assets are NOT covered and cannot be redistributed.
+The existence of this repository or its licence do NOT permit you to upload or reupload the mod without my permission, as has happened before. While the code is covered by GPLv3, the JSON configuration files and mod assets are NOT covered and cannot be redistributed.

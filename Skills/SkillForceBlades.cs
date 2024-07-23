@@ -7,7 +7,7 @@ namespace Bladedancer.Skills;
 
 public class SkillForceBlades : SpellSkillData {
     [SkillCategory("Force Blades", Category.Base | Category.Gravity, 1)]
-    [ModOptionFloatValuesDefault(0.0f, 2f, 0.5f, 1.5f)]
+    [ModOptionFloatValues(0.0f, 2f, 0.5f)]
     [ModOptionSlider, ModOption("Force Blades Force Multiplier", "How much force is added with Force Blades")]
     public static float multiplier = 1.5f;
 

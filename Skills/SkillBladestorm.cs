@@ -9,9 +9,9 @@ namespace Bladedancer.Skills;
 
 public class SkillBladestorm : SpellBladeMergeData {
     [SkillCategory("Bladestorm", Category.Base, 3)]
-    [ModOptionFloatValuesDefault(0.05f, 0.2f, 0.05f, 0.15f)]
+    [ModOptionFloatValues(0.05f, 0.2f, 0.05f)]
     [ModOptionSlider, ModOption("Bladestorm Fire Rate", "How fast Bladestorm fires daggers")]
-    public static float shootCooldown;
+    public static float shootCooldown = 0.15f;
     
     public float sprayDaggerMinHandAngle = 20f;
     protected float lastShoot;

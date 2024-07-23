@@ -7,14 +7,14 @@ namespace Bladedancer.Skills;
 public class SkillVortexBlender : SpellBladeMergeData {
     protected Transform centerPoint;
     [SkillCategory("Vortex Blender", Category.Base | Category.Gravity, 3)]
-    [ModOptionFloatValuesDefault(180f, 720, 180f, 360f)]
+    [ModOptionFloatValues(180f, 720, 180f)]
     [ModOptionSlider, ModOption("Vortex Spin Speed", "How fast the vortex spins at base")]
-    public static float spinSpeed;
+    public static float spinSpeed = 360f;
 
     [SkillCategory("Vortex Blender", Category.Base | Category.Gravity, 3)]
-    [ModOptionFloatValuesDefault(1, 2, 0.1f, 1.3f)]
+    [ModOptionFloatValues(1, 2, 0.1f)]
     [ModOptionSlider, ModOption("Vortex Radius", "Radius of the vortex")]
-    public static float spinDistance;
+    public static float spinDistance = 1.3f;
 
     protected float spinAmount = 0;
     protected float spinMult = 1;

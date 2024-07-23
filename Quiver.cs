@@ -14,14 +14,14 @@ public class Quiver : ThunderBehaviour {
     public const string MaxCount = "MaxCrownCount";
     
     [SkillCategory("Crown of Knives", Category.Base, 2)]
-    [ModOptionIntValuesDefault(0, 12, 1, 4)]
+    [ModOptionIntValues(0, 12, 1)]
     [ModOptionSlider, ModOption("Max Blade Count", "Maximum number of blades the Crown of Knives can store at once.")]
-    public static int baseQuiverCount;
+    public static int baseQuiverCount = 4;
 
     [SkillCategory("Crown of Knives", Category.Base, 2)]
-    [ModOptionFloatValuesDefault(30, 90, 30, 60)]
+    [ModOptionFloatValues(30, 90, 30)]
     [ModOptionSlider, ModOption("Crown Spread Angle", "Spread angle for daggers in the crown.")]
-    public static float quiverSpread;
+    public static float quiverSpread = 60;
 
     [SkillCategory("Crown of Knives", Category.Base, 2)]
     [ModOption("Crown Mode", "Visual appearance of the crown.")]
@@ -32,9 +32,9 @@ public class Quiver : ThunderBehaviour {
     public static bool holsterWhenCrouched;
 
     [SkillCategory("Crown of Knives", Category.Base, 2)]
-    [ModOptionFloatValuesDefault(0, 3, 0.1f, 0.5f)]
+    [ModOptionFloatValues(0, 3, 0.1f)]
     [ModOptionSlider, ModOption("Holster Crouch Delay", "How long you need to be crouched before the blades hide themselves")]
-    public static float crouchDelay;
+    public static float crouchDelay = 0f;
 
     public Creature creature;
     public Mode mode;
@@ -393,19 +393,15 @@ public class Quiver : ThunderBehaviour {
         Vector3 position,
         out Blade blade,
         ItemData.Type? preferredType = null,
-        bool defaultOnly = false,
         bool allowHolsters = true,
         bool scale = true) {
         float distance = Mathf.Infinity;
         List<Blade> bladesToCheck = null;
 
-        if (preferredType != null || defaultOnly) {
+        if (preferredType != null) {
             bladesToCheck = new List<Blade>();
             for (var i = 0; i < blades.Count; i++) {
-                if (defaultOnly) {
-                    if (blades[i].isDefaultBlade)
-                        bladesToCheck.Add(blades[i]);
-                } else if (blades[i].item.data.type == preferredType) {
+                if (blades[i].item.data.type == preferredType) {
                     bladesToCheck.Add(blades[i]);
                 }
             }
@@ -454,11 +450,13 @@ public class Quiver : ThunderBehaviour {
                 item.gameObject.TryGetOrAddComponent(out blade);
                 break;
             }
-            
+
             if (item.childHolders is { Count: > 0 }
-                && allowedQuiverItemHashIds.Contains(item.data.hashId)
                 && item.childHolders[0].items.Count > 0
-                && item.childHolders[0].items[0] is Item quiverHolsteredItem) {
+                && item.childHolders[0].items[0] is Item quiverHolsteredItem
+                && (allowedQuiverItemHashIds.Contains(item.data.hashId)
+                    || item.childHolders[0].items[0].data.hashId == Blade.GetBladeItemData(creature).hashId)
+               ) {
                 item.childHolders[0].UnSnap(quiverHolsteredItem);
                 quiverHolsteredItem.gameObject.TryGetOrAddComponent(out blade);
                 break;

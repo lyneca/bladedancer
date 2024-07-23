@@ -5,6 +5,9 @@ using UnityEngine;
 namespace Bladedancer; 
 
 public class CustomWristStats : ThunderBehaviour {
+    [SkillCategory("Crown of Knives", Category.Base, 2)]
+    [ModOptionSlider, ModOption("Show Crown UI On Wrist", "Show or hide the crown wrist UI. Off by default as it can break things pretty significantly.", defaultValueIndex = 0)]
+    public static bool allowEnable;
     public override ManagedLoops EnabledManagedLoops => ManagedLoops.Update;
 
     public Creature creature;
@@ -18,6 +21,9 @@ public class CustomWristStats : ThunderBehaviour {
     public static int useEmissionPropertyID = Shader.PropertyToID("_UseEmission");
 
     private void Awake() {
+        if (ModOptions.TryGetOption("Show Crown UI On Wrist", out ModOption option)) {
+            option.ValueChanged += OnChanged;
+        }
         creature = GetComponentInParent<Creature>();
         stats = GetComponent<WristStats>();
         creature.OnDespawnEvent += OnCreatureDespawn;
@@ -25,9 +31,15 @@ public class CustomWristStats : ThunderBehaviour {
         indicatorList = new List<GameObject>();
     }
 
+    private void OnChanged(object obj) {
+        if (obj is not bool enabled) return;
+        if (enabled) Refresh(creature);
+        else SetActive(false);
+    }
+
     protected override void ManagedUpdate() {
         base.ManagedUpdate();
-        if (stats.isShown != isShown)
+        if (stats.isShown != isShown && (!stats.isShown || allowEnable))
             SetActive(stats.isShown);
     }
 
@@ -98,16 +110,19 @@ public class CustomWristStats : ThunderBehaviour {
         for (var i = 0; i < meshes.Length; i++) {
             var mesh = meshes[i];
             var meshRenderer = mesh.GetComponent<MeshRenderer>();
-            if (meshRenderer == null || !meshRenderer.enabled) continue;
+            if (meshRenderer != null)
+                Debug.Log($"Found {meshRenderer} on item {blade.item} with {meshRenderer.materials.Length} material(s)");
+            if (meshRenderer == null || !meshRenderer.enabled || meshRenderer.materials.Length == 0) continue;
+            Debug.Log($"Creating indicator component for mesh {mesh}");
             var clone = new GameObject().AddComponent<MeshFilter>();
-            clone.mesh = Instantiate(mesh.sharedMesh);
+            clone.mesh = Instantiate(mesh.mesh);
             clone.transform.SetParent(mesh.transform.parent);
             clone.transform.localPosition = mesh.transform.localPosition;
             clone.transform.localRotation = mesh.transform.localRotation;
             clone.transform.localScale = mesh.transform.localScale;
             clone.transform.SetParent(obj.transform);
             var cloneRenderer = clone.gameObject.AddComponent<MeshRenderer>();
-            cloneRenderer.material = Instantiate(meshRenderer.sharedMaterial);
+            cloneRenderer.material = Instantiate(meshRenderer.material);
             Imbue imbue = null;
             for (var j = 0; j < blade.item.colliderGroups.Count; j++) {
                 if (blade.item.colliderGroups[j].imbueEmissionRenderer == meshRenderer) {
@@ -129,7 +144,7 @@ public class CustomWristStats : ThunderBehaviour {
                     float amount,
                     float change,
                     EventTime time) {
-                    if (time == EventTime.OnEnd) {
+                    if (enabled && time == EventTime.OnEnd) {
                         linker.Refresh();
                     }
                 }

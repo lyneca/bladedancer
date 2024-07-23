@@ -9,39 +9,39 @@ namespace Bladedancer.Skills;
 
 public class SkillStormVolley : SpellBladeMergeData {
     [SkillCategory("Storm Volley", Category.Base | Category.Lightning, 3)]
-    [ModOptionFloatValuesDefault(0.05f, 0.3f, 0.05f, 0.2f)]
+    [ModOptionFloatValues(0.05f, 0.3f, 0.05f)]
     [ModOptionSlider, ModOption("Storm Volley Size", "Distance between daggers in Storm Volley.")]
-    public static float size;
+    public static float size = 0.2f;
     
     [SkillCategory("Storm Volley", Category.Base | Category.Lightning, 3)]
-    [ModOptionFloatValuesDefault(1f, 30f, 1f, 8f)]
+    [ModOptionFloatValues(1f, 30f, 1f)]
     [ModOptionSlider, ModOption("Storm Volley Throw Speed", "Throw speed multiplier for Storm Volley throw.")]
-    public static float velocityMult;
+    public static float velocityMult = 8f;
     
     [SkillCategory("Storm Volley", Category.Base | Category.Lightning, 3)]
-    [ModOptionFloatValuesDefault(0f, 2, 0.1f, 0.5f)]
+    [ModOptionFloatValues(0f, 2, 0.1f)]
     [ModOptionSlider, ModOption("Storm Volley Throw Spread", "Spread amount multiplier for Storm Volley throw.")]
-    public static float spreadMult;
+    public static float spreadMult = 0.5f;
     
     [SkillCategory("Storm Volley", Category.Base | Category.Lightning, 3)]
-    [ModOptionFloatValuesDefault(1f, 3f, 0.1f, 2f)]
+    [ModOptionFloatValues(1f, 3f, 0.1f)]
     [ModOptionSlider, ModOption("Storm Volley Size (Spraying)", "Multiplier on the distance between daggers in Storm Volley while spraying.")]
-    public static float spraySpreadMult;
+    public static float spraySpreadMult = 2f;
     
     [SkillCategory("Storm Volley", Category.Base | Category.Lightning, 3)]
-    [ModOptionFloatValuesDefault(0.5f, 2f, 0.1f, 0.6f)]
+    [ModOptionFloatValues(0.5f, 2f, 0.1f)]
     [ModOptionSlider, ModOption("Storm Volley Player Distance (Spraying)", "How far the daggers float from the player while spraying")]
-    public static float sprayDistanceFromPlayer;
+    public static float sprayDistanceFromPlayer = 0.6f;
     
     [SkillCategory("Storm Volley", Category.Base | Category.Lightning, 3)]
-    [ModOptionFloatValuesDefault(0f, 1, 0.1f, 0.8f)]
+    [ModOptionFloatValues(0f, 1, 0.1f)]
     [ModOptionSlider, ModOption("Storm Volley Thunderbolt Delay Min", "Min time between thunderbolts")]
-    public static float thunderboltDelayMin;
+    public static float thunderboltDelayMin = 0.8f;
     
     [SkillCategory("Storm Volley", Category.Base | Category.Lightning, 3)]
-    [ModOptionFloatValuesDefault(0f, 1, 0.1f, 0.2f)]
+    [ModOptionFloatValues(0f, 1, 0.1f)]
     [ModOptionSlider, ModOption("Storm Volley Thunderbolt Delay Max", "Max time between thunderbolts")]
-    public static float thunderboltDelayMax;
+    public static float thunderboltDelayMax = 0.2f;
     
     public float thunderboltMinAngle = 20f;
     public float lastThunderbolt;

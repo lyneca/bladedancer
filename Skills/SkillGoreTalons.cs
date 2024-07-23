@@ -10,9 +10,9 @@ namespace Bladedancer.Skills;
 public class SkillGoreTalons : SkillSpellPunch {
     [SkillCategory("Gore Talons", Category.Base | Category.Body, 1), ModOptionOrder(0)]
     [ModOption("Talon Count", "Number of blades that are pulled into the talons.")]
-    [ModOptionSlider, ModOptionIntValuesDefault(1, 5, 1, 3)]
-    public static int talonCount;
-    
+    [ModOptionSlider, ModOptionIntValues(1, 5, 1)]
+    public static int talonCount = 3;
+
     [SkillCategory("Gore Talons", Category.Base | Category.Body, 1), ModOptionOrder(0)]
     [ModOption("Talon Climbing",
         "When enabled, talons are fully jointed to your hands, allowing you to climb surfaces by stabbing into them.",
@@ -20,52 +20,58 @@ public class SkillGoreTalons : SkillSpellPunch {
     public static bool allowClimbing = true;
 
     [SkillCategory("Gore Talons", Category.Base | Category.Body, 1), ModOptionOrder(1)]
-    [ModOptionFloatValuesDefault(0.05f, 0.3f, 0.05f, 0.15f)]
+    [ModOptionFloatValues(0.05f, 0.3f, 0.05f)]
     [ModOptionSlider, ModOption("Talon Distance", "How far away talons lie from your hand.")]
-    public static float talonDistance;
+    public static float talonDistance = 0.15f;
 
     [SkillCategory("Gore Talons", Category.Base | Category.Body, 1), ModOptionOrder(1)]
-    [ModOptionFloatValuesDefault(0f, 0.1f, 0.05f, 0.05f)]
+    [ModOptionFloatValues(0f, 0.1f, 0.05f)]
     [ModOptionSlider, ModOption("Talon Forward Distance", "How far the talons protrude from your hand.")]
-    public static float talonForward;
+    public static float talonForward = 0.05f;
     
     [SkillCategory("Gore Talons", Category.Base | Category.Body, 1), ModOptionOrder(1)]
-    [ModOptionFloatValuesDefault(120, 360, 30, 180)]
+    [ModOptionFloatValues(120, 360, 30)]
     [ModOptionSlider, ModOption("Talon Spread Angle", "Angle which the talons are spread over.")]
-    public static float talonAngle;
+    public static float talonAngle = 180;
 
     [SkillCategory("Gore Talons", Category.Base | Category.Body, 1), ModOptionOrder(2)]
-    [ModOptionSlider, ModOptionFloatValuesDefault(0, 30, 5, 0)]
+    [ModOptionSlider, ModOptionFloatValues(0, 30, 5)]
     [ModOption("Talon Speed",
         "How fast the talons match your hand movement; higher is faster. Set to 0 for instant. Does nothing when climbing is enabled.")]
-    public static float talonSpeed;
+    public static float talonSpeed = 0;
 
     [SkillCategory("Gore Talons", Category.Base | Category.Body, 1), ModOptionOrder(3)]
-    [ModOptionSlider, ModOptionFloatValuesDefault(1, 10f, 0.5f, 4)]
+    [ModOptionSlider, ModOptionFloatValues(1, 10f, 0.5f)]
     [ModOption("Talon Hand Strength Mult",
         "Talon hand strength multiplier, when climbing is enabled. Increases the player's strength, allowing you to pick up and climb stuff easier with the talons.")]
-    public static float handStrengthMult;
+    public static float handStrengthMult = 4;
 
     [SkillCategory("Gore Talons", Category.Base | Category.Body, 1), ModOptionOrder(3)]
-    [ModOptionSlider, ModOptionFloatValuesDefault(0.5f, 4f, 0.05f, 1.65f)]
+    [ModOptionSlider, ModOptionFloatValues(0.5f, 4f, 0.05f)]
     [ModOption("Talon Mass Scale",
         "Talon strength, when climbing is enabled. Lower values mean stronger grabbing and climbing, but can result in buggy behaviour.")]
-    public static float talonMassScale;
+    public static float talonMassScale = 1.65f;
 
     [SkillCategory("Gore Talons", Category.Base | Category.Body, 1), ModOptionOrder(4)]
-    [ModOptionFloatValuesDefault(0f, 100000f, 500f, 50000)]
+    [ModOptionFloatValues(0f, 100000f, 500f)]
     [ModOptionSlider, ModOption("Talon Spring (adv.)", "Talon joint spring")]
-    public static float talonSpring;
+    public static float talonSpring = 50000;
 
     [SkillCategory("Gore Talons", Category.Base | Category.Body, 1), ModOptionOrder(4)]
-    [ModOptionFloatValuesDefault(0f, 10000f, 50f, 300f)]
+    [ModOptionFloatValues(0f, 10000f, 50f)]
     [ModOptionSlider, ModOption("Talon Damper (adv.)", "Talon joint damper")]
-    public static float talonDamper;
+    public static float talonDamper = 300f;
 
     [SkillCategory("Gore Talons", Category.Base | Category.Body, 1), ModOptionOrder(4)]
-    [ModOptionFloatValuesDefault(0f, 100000f, 1000f, 22000f)]
+    [ModOptionFloatValues(0f, 100000f, 1000f)]
     [ModOptionSlider, ModOption("Talon Max Force (adv.)", "Talon joint max force")]
-    public static float talonMaxForce;
+    public static float talonMaxForce = 22000f;
+    
+    [SkillCategory("Gore Talons", Category.Base | Category.Body, 1), ModOptionOrder(1)]
+    [ModOptionFloatValues(0.5f, 20f, 0.5f)]
+    [ModOptionSlider, ModOption("Talon Throw Mult", "Talon throw force multiplier")]
+    public static float throwMult = 6f;
+
 
     protected static bool refreshing;
     
@@ -104,8 +110,11 @@ public class SkillGoreTalons : SkillSpellPunch {
     public IEnumerator OnFistRoutine(PlayerHand hand, bool gripping) {
         yield return new WaitForEndOfFrame();
         if (hand == null || hand.ragdollHand == null) yield break;
-        if (hand.ragdollHand.grabbedHandle != null) yield break;
-        if (!Quiver.TryGet(hand.ragdollHand?.creature, out var quiver)) yield break;
+        if (!Quiver.TryGet(hand.ragdollHand.creature, out var quiver)) yield break;
+        gripping = gripping
+                   && hand.ragdollHand.grabbedHandle == null
+                   && hand.ragdollHand.caster.telekinesis.catchedHandle == null;
+
         Player.currentCreature.SetVariable(TalonActive + hand.side, gripping);
 
         Refresh(hand.side);
@@ -142,13 +151,20 @@ public class SkillGoreTalons : SkillSpellPunch {
         if (active && talons.Count == talonCount) return;
         refreshing = true;
         int startCount = talons.Count;
+        var velocity = hand.ragdollHand.Velocity();
+        bool throwing = talonCount == 0 && velocity.magnitude > SpellCaster.throwMinHandVelocity;
 
         for (var i = 0; i < talons.Count; i++) {
             if (!talons[i]) continue;
             talons[i].OnPenetrate -= OnPenetrate;
             talons[i].OnUnPenetrate -= OnPenetrate;
-            if (!talons[i].ReturnToQuiver(Quiver.Main))
+            if (throwing) {
                 talons[i].Release();
+                talons[i].AddForce(velocity * throwMult, ForceMode.VelocityChange);
+            } else {
+                if (!talons[i].ReturnToQuiver(Quiver.Main))
+                    talons[i].Release();
+            }
         }
 
         talons.Clear();

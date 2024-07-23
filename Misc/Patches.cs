@@ -25,11 +25,16 @@ public class Patches {
             AudioClip audioClip = null;
             yield return Catalog.LoadAssetCoroutine<AudioClip>(allTrees[i].musicAddress,
                 value => audioClip = value, nameof(SkillTree));
+
+            if (audioClip == null) {
+                Debug.LogWarning($"Skill tree {allTrees[i].id} has a non-null musicAddress, but no AudioClip could be loaded!");
+                continue;
+            }
+
             Debug.Log($"Adding track {audioClip.name} at index {index}");
             musicClips.Add(audioClip);
             treeToMusicTrack[allTrees[i].hashId] = index++;
         }
-
         
         musicPlayer.LoadClips(musicClips);
         musicPlayer.Play();

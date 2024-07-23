@@ -9,19 +9,19 @@ namespace Bladedancer.Skills;
 
 public class SkillTidalPull : SpellSkillData {
     [SkillCategory("Tidal Pull", Category.Base | Category.Gravity, 2)]
-    [ModOptionFloatValuesDefault(0, 30, 1, 10)]
+    [ModOptionFloatValues(0, 30, 1)]
     [ModOptionSlider, ModOption("Tidal Pull Tether Duration", "Tether joint strength")]
-    public static float duration;
+    public static float duration = 10;
     
     [SkillCategory("Tidal Pull", Category.Base | Category.Gravity, 2)]
-    [ModOptionFloatValuesDefault(0, 10000, 100, 2000)]
+    [ModOptionFloatValues(0, 10000, 100)]
     [ModOptionSlider, ModOption("Tidal Pull Joint Spring", "Tether joint strength")]
-    public static float spring;
+    public static float spring = 2000;
     
     [SkillCategory("Tidal Pull", Category.Base | Category.Gravity, 2)]
-    [ModOptionFloatValuesDefault(0, 1000, 10, 100)]
+    [ModOptionFloatValues(0, 1000, 10)]
     [ModOptionSlider, ModOption("Tidal Pull Joint Damper", "Tether joint damping force")]
-    public static float damper;
+    public static float damper = 100;
     
     public const string LastBodyHit = "TidalPullLastBody";
     public const string LastPointHit = "TidalPullLastPoint";

@@ -24,75 +24,75 @@ public class SpellCastBlade : SpellCastCharge {
     public static bool allowRangedExpert;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValuesDefault(5, 20, 5, 10)]
+    [ModOptionSlider, ModOptionFloatValues(5, 20, 5)]
     [ModOption("Default Joint Mass Scale", "Blade joint-mode mass scale. Makes joint-based movement stronger.")]
-    public static float jointMassScale;
+    public static float jointMassScale = 10;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValuesDefault(250, 1000, 250, 500)]
+    [ModOptionSlider, ModOptionFloatValues(250, 1000, 250)]
     [ModOption("Default Joint Spring", "Blade joint-mode spring strength")]
-    public static float jointSpring;
+    public static float jointSpring = 500;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValuesDefault(0, 100, 1f, 10)]
+    [ModOptionSlider, ModOptionFloatValues(0, 100, 1f)]
     [ModOption("Default Joint Damper", "Joint spring damper")]
-    public static float jointDamper;
+    public static float jointDamper = 10;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValuesDefault(5, 30, 1, 20)]
+    [ModOptionSlider, ModOptionFloatValues(5, 30, 1)]
     [ModOption("Scale Speed", "Speed at which weapons scale themselves (when necessary).")]
-    public static float scaleSpeed;
+    public static float scaleSpeed = 20;
 
     public static float handJointLerp = 20f;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValuesDefault(5000, 100000, 5000, 10000)]
+    [ModOptionSlider, ModOptionFloatValues(5000, 100000, 5000)]
     [ModOption("Joint Max Force", "Joint maximum force")]
-    public static float jointMaxForce;
+    public static float jointMaxForce = 10000;
 
     // [SkillCategory("General")]
     // [ModOption("PID Force Mode", "PID force application mode")]
     public static ForceMode pidForceMode = ForceMode.Acceleration;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValuesDefault(50, 300, 50, 100)]
+    [ModOptionSlider, ModOptionFloatValues(50, 300, 50)]
     [ModOption("PID Max Force", "PID Max Force")]
-    public static float pidMaxForce;
+    public static float pidMaxForce = 100;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValuesDefault(0, 10, 1, 1)]
+    [ModOptionSlider, ModOptionFloatValues(0, 10, 1)]
     [ModOption("PID Damping", "PID Damping")]
-    public static float pidDamping;
+    public static float pidDamping = 1;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValuesDefault(0, 5, 1, 3)]
+    [ModOptionSlider, ModOptionFloatValues(0, 5, 1)]
     [ModOption("Despawn Time", "Time before a blade despawns or is collected")]
-    public static float collectTime;
+    public static float collectTime = 3;
 
     [SkillCategory("Slingblade", Category.Base, 1, 0)]
-    [ModOptionSlider, ModOptionFloatValuesDefault(8, 20, 2, 12)]
+    [ModOptionSlider, ModOptionFloatValues(8, 20, 2)]
     [ModOption("Throw Force", "Force added when thrown using Slingblade")]
-    public static float throwForce;
+    public static float throwForce = 12;
 
     [SkillCategory("Slingblade", Category.Base, 1, 0)]
-    [ModOptionSlider, ModOptionFloatValuesDefault(2, 10, 2, 7)]
+    [ModOptionSlider, ModOptionFloatValues(2, 10, 2)]
     [ModOption("AI Throw Force", "Forced throw hand velocity for NPCs using Slingblade")]
-    public static float aiThrowForce;
+    public static float aiThrowForce = 7;
 
     [SkillCategory("Slingblade", Category.Base, 1, 0)]
-    [ModOptionSlider, ModOptionFloatValuesDefault(1, 5, 0.5f, 3.5f)]
+    [ModOptionSlider, ModOptionFloatValues(1, 5, 0.5f)]
     [ModOption("Gravity Force Compensation", "Force multiplier when throwing a Gravity-imbued blade using Slingblade")]
-    public static float gravityForceCompensation;
+    public static float gravityForceCompensation = 3.5f;
 
     [SkillCategory("Staff Slam", Category.Base, 1)]
-    [ModOptionSlider, ModOptionIntValuesDefault(1, 12, 1, 6)]
+    [ModOptionSlider, ModOptionIntValues(1, 12, 1)]
     [ModOption("Staff Slam Blade Count", "Number of blades fired when you slam the staff")]
-    public static int slamBladeCount;
+    public static int slamBladeCount = 6;
     
     [SkillCategory("Staff Slam", Category.Base, 1)]
-    [ModOptionSlider, ModOptionFloatValuesDefault(1, 40, 1f, 20)]
+    [ModOptionSlider, ModOptionFloatValues(1, 40, 1f)]
     [ModOption("Staff Slam Throw Force", "Force multiplier on blades summoned via staff slam")]
-    public static float slamThrowForce;
+    public static float slamThrowForce = 20;
     
     public static bool aimAssist = false;
     public bool stealIfNearby;
@@ -154,9 +154,6 @@ public class SpellCastBlade : SpellCastCharge {
 
     public override void OnSkillLoaded(SkillData skillData, Creature creature) {
         base.OnSkillLoaded(skillData, creature);
-        if (creature.isPlayer)
-            creature.SetVariable(Blade.BladeItem,
-                Blade.GetPlayerCustomBlade() ?? Catalog.GetData<ItemData>(defaultBladeId));
     }
 
     public override void OnSkillUnloaded(SkillData skillData, Creature creature) {
@@ -174,6 +171,8 @@ public class SpellCastBlade : SpellCastCharge {
         LocalizationManager.Instance.OnLanguageChanged(LocalizationManager.Instance.Language);
         
         IngameDebugConsole.DebugLogConsole.AddCommand("localize", "Localize a string", Localize);
+        
+        EventManager.onPossess += OnPossess;
 
         Blade.defaultBladeId = defaultBladeId;
         Blade.defaultItemData = Catalog.GetData<ItemData>(defaultBladeId);
@@ -189,6 +188,11 @@ public class SpellCastBlade : SpellCastCharge {
         spawnEffectData = Catalog.GetData<EffectData>(spawnEffectId);
         retrieveEffectData = Catalog.GetData<EffectData>(retrieveEffectId);
         ModOptions.Setup();
+    }
+
+    private void OnPossess(Creature creature, EventTime time) {
+        if (time != EventTime.OnEnd) return;
+        creature.SetVariable(Blade.BladeItem, Blade.LoadSavedCustomBlade() ?? Catalog.GetData<ItemData>(defaultBladeId));
     }
 
     public override void Load(SpellCaster spellCaster) {
@@ -277,7 +281,7 @@ public class SpellCastBlade : SpellCastCharge {
             }
 
             var item = colliderGroup.gameObject.GetComponentInParent<Item>();
-            if (item.TryGetComponent<Blade>(out var blade) && blade.isDefaultBlade) return;
+            if (item.TryGetComponent<Blade>(out var blade)) return;
 
             // Add ColliderGroup to list
             spellCaster.imbueObjects.Add(new SpellCaster.ImbueObject(colliderGroup));
@@ -535,84 +539,7 @@ public class SpellCastBlade : SpellCastCharge {
     public override void Load(Imbue imbue) {
         base.Load(imbue);
         Init();
-        BringIntoCrown();
     }
-
-    public void BringIntoCrown() {
-        if (imbue.colliderGroup.collisionHandler?.item is not Item item) return;
-
-        imbue.SetEnergyInstant(imbue.maxEnergy);
-
-        var blade = item.gameObject.GetOrAddComponent<Blade>();
-        blade.Quiver = quiver;
-        blade.isDefaultBlade = false;
-        blade.AllowDespawn(true);
-        for (var i = spellCaster.imbueObjects.Count - 1; i >= 0; i--) {
-            if (imbue.spellCastBase.spellCaster.imbueObjects[i].colliderGroup?.collisionHandler?.item is Item
-                    collidingItem
-                && collidingItem == blade.item) {
-                if (imbue.spellCastBase.spellCaster.spellInstance is SpellCastBlade imbuingSpell)
-                    imbuingSpell.OnTriggerImbue(imbue.colliderGroup.colliders[0], false);
-                break;
-            }
-        }
-        if (blade.item.IsFree) {
-            if (quiver.IsFull) {
-                if (quiver.TryGetClosestBlade(item.transform.position, out Blade replacement, null, true)) replacement.Release();
-            }
-
-            if (blade.ReturnToQuiver(quiver, true)) return;
-        } else if (blade.item.mainHandler != null) {
-            blade.item.OnUngrabEvent += UnGrab;
-            return;
-        }
-
-        quiver.OnAvailableSpace += AvailableSpace;
-        blade.OnAddToQuiver += AddToQuiver;
-        blade.item.OnDespawnEvent += Despawn;
-        return;
-
-        void UnGrab(Handle _, RagdollHand __, bool ___) {
-            blade.item.OnUngrabEvent -= UnGrab;
-            if (blade.item.IsFree && !blade.item.isCulled) {
-                if (quiver.IsFull) {
-                    if (quiver.TryGetClosestBlade(item.transform.position, out var replacement, null, true))
-                        replacement.Release();
-                }
-
-                if (blade.ReturnToQuiver(quiver, true)) return;
-            }
-
-            quiver.OnAvailableSpace += AvailableSpace;
-            blade.OnAddToQuiver += AddToQuiver;
-        }
-
-        void AvailableSpace(Quiver _) {
-            if (!blade.IsFree) return;
-            quiver.OnAvailableSpace -= AvailableSpace;
-            blade.OnAddToQuiver -= AddToQuiver;
-            blade.item.OnDespawnEvent -= Despawn;
-            blade.item.OnUngrabEvent -= UnGrab;
-            blade.ReturnToQuiver(quiver);
-        }
-
-        void AddToQuiver(Blade _, Quiver __) {
-            quiver.OnAvailableSpace -= AvailableSpace;
-            blade.OnAddToQuiver -= AddToQuiver;
-            blade.item.OnDespawnEvent -= Despawn;
-            blade.item.OnUngrabEvent -= UnGrab;
-        }
-
-        void Despawn(EventTime time) {
-            if (time == EventTime.OnEnd) return;
-
-            blade.item.OnDespawnEvent -= Despawn;
-            blade.item.OnUngrabEvent -= UnGrab;
-            quiver.OnAvailableSpace -= AvailableSpace;
-            blade.OnAddToQuiver -= AddToQuiver;
-        }
-    }
-
 
     public override void Throw(Vector3 velocity) {
         base.Throw(velocity);

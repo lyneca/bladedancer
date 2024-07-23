@@ -11,14 +11,14 @@ public class SkillFiresGuidance : SpellSkillData {
     public static int spellHashId;
 
     [SkillCategory("Fire's Guidance", Category.Base | Category.Fire, 1)]
-    [ModOptionFloatValuesDefault(5f, 30f, 5f, 15f)]
+    [ModOptionFloatValues(5f, 30f, 5f)]
     [ModOptionSlider, ModOption("Fire's Guidance Speed", "Speed of guided fire-imbued daggers")]
-    public static float guidanceSpeed;
+    public static float guidanceSpeed = 15f;
     
     [SkillCategory("Fire's Guidance", Category.Base | Category.Fire, 1)]
-    [ModOptionFloatValuesDefault(0f, 0.5f, 0.1f, 0.2f)]
+    [ModOptionFloatValues(0f, 0.5f, 0.1f)]
     [ModOptionSlider, ModOption("Fire's Guidance Grip Window", "Length of the time window you have to grip for guidance to start")]
-    public static float gripWindow;
+    public static float gripWindow = 0.2f;
 
     [SkillCategory("Fire's Guidance", Category.Base | Category.Fire, 1)]
     [ModOption("Fire's Guidance Allow Throw", "Whether to allow throwing the dagger when you release your hand",
@@ -26,14 +26,14 @@ public class SkillFiresGuidance : SpellSkillData {
     public static bool allowThrow;
 
     [SkillCategory("Fire's Guidance", Category.Base | Category.Fire, 1)]
-    [ModOptionFloatValuesDefault(0f, 20f, 1f, 5f)]
+    [ModOptionFloatValues(0f, 20f, 1f)]
     [ModOptionSlider, ModOption("Fire's Guidance Throw Force", "Force added to the dagger on throw")]
-    public static float throwForce;
+    public static float throwForce = 5f;
 
     [SkillCategory("Fire's Guidance", Category.Base | Category.Fire, 1)]
-    [ModOptionFloatValuesDefault(0f, 20f, 0.01f, 1f)]
+    [ModOptionFloatValues(0f, 20f, 0.01f)]
     [ModOptionSlider, ModOption("Fire's Guidance Haptic Max Angle", "Duration over which guidance 'kicks in' after throw")]
-    public static float hapticAngleAmount;
+    public static float hapticAngleAmount = 1f;
 
     public string throwEffectId;
     protected EffectData throwEffectData;

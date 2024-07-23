@@ -13,30 +13,6 @@ public class SkillCategory : ModOptionCategory {
     public SkillCategory(string name, int tier = 0, int skill = 0) : base(name, tier << 3 + skill) {}
 }
 
-public class ModOptionFloatValuesDefault : ModOptionFloatValues {
-    public float defaultValue;
-    public ModOptionFloatValuesDefault(float start, float end, float step, float defaultValue) : base(start, end, step) {
-        this.defaultValue = Mathf.Clamp(defaultValue, start, end);
-    }
-
-    public override void Process() {
-        base.Process();
-        modOption.defaultValueIndex = Mathf.FloorToInt((defaultValue - startRange) / step);
-    }
-}
-
-public class ModOptionIntValuesDefault : ModOptionIntValues {
-    public int defaultValue;
-    public ModOptionIntValuesDefault(int start, int end, int step, int defaultValue) : base(start, end, step) {
-        this.defaultValue = Mathf.Clamp(defaultValue, start, end);
-    }
-
-    public override void Process() {
-        base.Process();
-        modOption.defaultValueIndex = Mathf.FloorToInt((defaultValue - startRange) / (float)step);
-    }
-}
-
 [Flags]
 public enum Category {
     Base      = 0b000001,
@@ -134,9 +110,25 @@ public static class Fixes {
     
 }
 
+public class Debug {
+    public static void Log(params object[] args) {
+        UnityEngine.Debug.Log("[Bladedancer] " + string.Join(" ", args));
+    }
+
+    public static void LogWarning(params object[] args) {
+        UnityEngine.Debug.LogWarning("[Bladedancer] " + string.Join(" ", args));
+    }
+
+    public static void LogException(Exception exception) {
+        UnityEngine.Debug.LogException(exception);
+    }
+
+    public static void LogError(params object[] args) {
+        UnityEngine.Debug.LogError("[Bladedancer] " + string.Join(" ", args));
+    }
+}
 
 public static class Extension {
-
     public static Vector3 ForwardVector(this Item item) {
         if (item.flyDirRef) {
             return item.flyDirRef.forward;

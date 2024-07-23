@@ -9,7 +9,6 @@ using ThunderRoad.DebugViz;
 using ThunderRoad.Skill;
 using ThunderRoad.Skill.Spell;
 using UnityEngine;
-using Debug = UnityEngine.Debug;
 
 namespace Bladedancer; 
 
@@ -46,7 +45,6 @@ public class Blade : ThunderBehaviour {
 
     protected float freeStartTime;
     protected bool hasResetAfterFree;
-    public bool isDefaultBlade = true;
 
     public override ManagedLoops EnabledManagedLoops => ManagedLoops.Update | ManagedLoops.FixedUpdate;
     
@@ -130,14 +128,15 @@ public class Blade : ThunderBehaviour {
     public bool InQuiver => Quiver != null && Quiver.Has(this);
     
     public static void SetCustomBlade(string id) {
-        ClearCustomBlade();
-        Debug.Log("Setting custom blade");
+        Debug.Log($"Clearing blade before re-setting to {id}...");
+        ClearCustomBlade(false);
+        Debug.Log($"Setting custom blade to {id}");
         Player.currentCreature.SetVariable(BladeItem, Catalog.GetData<ItemData>(id));
         Player.characterData.AddToContainer(ContainerName, new CustomBladeContent(id));
         Player.characterData.SaveAsync();
     }
-    public static void ClearCustomBlade() {
-        Debug.Log("Clearing custom blade");
+    public static void ClearCustomBlade(bool save = true) {
+        Debug.Log($"Clearing custom blade{(save ? " and saving" : " without saving")}");
         if (Player.characterData.TryGetContainer(ContainerName, out var contents)) {
             for (var i = contents.Count - 1; i >= 0; i--) {
                 if (contents[i] is CustomBladeContent)
@@ -145,9 +144,10 @@ public class Blade : ThunderBehaviour {
             }
         }
         Player.currentCreature.SetVariable(BladeItem, Catalog.GetData<ItemData>(defaultBladeId));
-        Player.characterData.SaveAsync();
+        if (save)
+            Player.characterData.SaveAsync();
     }
-    public static ItemData GetPlayerCustomBlade() {
+    public static ItemData LoadSavedCustomBlade() {
         Debug.Log("Attempting to get custom blade");
         if (Player.characterData == null
             || !Player.characterData.TryGetContainer(ContainerName, out var contents)) return null;
@@ -165,6 +165,11 @@ public class Blade : ThunderBehaviour {
         Debug.Log("Could not find any items :(");
 
         return null;
+    }
+
+    public static ItemData GetBladeItemData(Creature creature) {
+        if (creature && creature.TryGetVariable(BladeItem, out ItemData data)) return data;
+        return defaultItemData;
     }
 
 
@@ -200,13 +205,16 @@ public class Blade : ThunderBehaviour {
         Vector3 position,
         Quaternion rotation,
         Creature creature) {
-        if (creature == null || !creature.TryGetVariable(BladeItem, out ItemData data))
-            data = defaultItemData;
-
+        
+        var data = GetBladeItemData(creature);
+        if (data == null) {
+            Debug.LogWarning($"Blade item data is null for creature '{creature}'?");
+            return;
+        }
         data.SpawnAsync(item => {
             var blade = item.GetOrAddComponent<Blade>();
             item.transform.rotation
-                = rotation * Quaternion.Inverse(item.transform.InverseTransformRotation(item.flyDirRef.rotation));
+                = rotation * Quaternion.Inverse(item.transform.InverseTransformRotation(blade.ForwardRotation));
             blade.item.SetOwner(Item.Owner.None);
             if (!SpellCastBlade.allowRangedExpert)
                 blade.item.data.flags &= ~ItemFlags.Piercing;
@@ -234,7 +242,6 @@ public class Blade : ThunderBehaviour {
         item = GetComponent<Item>();
         item.OnGrabEvent += OnGrab;
         item.OnUngrabEvent += OnUnGrab;
-        item.OnFlyEndEvent += OnFlyEnd;
         item.OnDespawnEvent += OnItemDespawn;
         item.OnImbuesChangeEvent += OnImbuesChange;
         item.mainCollisionHandler.OnCollisionStartEvent += OnCollisionStart;
@@ -287,6 +294,12 @@ public class Blade : ThunderBehaviour {
         if ((hit.targetColliderGroup?.collisionHandler?.item as ThunderEntity
              ?? hit.targetColliderGroup?.collisionHandler?.ragdollPart?.ragdoll?.creature) is ThunderEntity entity) {
             OnHitEntity?.Invoke(this, entity, hit);
+        }
+
+        if (item.IsFree && !InQuiver) {
+            homingTarget = null;
+            homingTargetPoint = null;
+            StartDespawn();
         }
     }
 
@@ -442,12 +455,6 @@ public class Blade : ThunderBehaviour {
         OnUnPenetrate?.Invoke(this, collision, damager);
     }
 
-    public void OnFlyEnd(Item _) {
-        homingTarget = null;
-        homingTargetPoint = null;
-        StartDespawn();
-    }
-
     public void OnGrab(Handle handle, RagdollHand hand) {
         StopDespawn();
     }
@@ -483,6 +490,7 @@ public class Blade : ThunderBehaviour {
 
     public IEnumerator DespawnRoutine() {
         despawning.Add(this);
+        Debug.Log(SpellCastBlade.collectTime);
         yield return new WaitForSeconds(retrieveDelay == -1 ? SpellCastBlade.collectTime : retrieveDelay);
         retrieveDelay = -1;
         despawning.Remove(this);
@@ -563,10 +571,7 @@ public class Blade : ThunderBehaviour {
             && ReturnToQuiver(quiver)) return;
 
         // Couldn't add to quiver, despawn this blade
-        if (isDefaultBlade) Despawn();
-        else {
-            StartDespawn();
-        }
+        Despawn();
     }
 
     public void Despawn() {

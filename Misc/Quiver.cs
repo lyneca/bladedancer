@@ -384,6 +384,19 @@ public class Quiver : ThunderBehaviour {
         }
     }
 
+    public void Imbue(SpellCastCharge spell, float amount, Creature creature) {
+        if (blades == null || spell == null) return;
+        foreach (var blade in blades) {
+            if (blade.item.colliderGroups.Count == 0) continue;
+            for (var i = 0; i < blade.item.colliderGroups.Count; i++) {
+                var imbue = blade.item.colliderGroups[i].imbue;
+                if (imbue == null) continue;
+
+                imbue.Transfer(spell, amount, creature);
+            }
+        }
+    }
+
     public void MaxImbue(SpellCastCharge spell) {
         if (blades == null || spell == null) return;
         foreach (var blade in blades) {
@@ -655,8 +668,12 @@ public class Quiver : ThunderBehaviour {
 
     public void RefreshUI() {
         if (!creature.isPlayer || !CustomWristStats.allowEnable) return;
-        creature.handLeft.wristStats.transform.GetOrAddComponent<CustomWristStats>().Refresh(this);
-        creature.handRight.wristStats.transform.GetOrAddComponent<CustomWristStats>().Refresh(this);
+        creature.handLeft.wristStats.transform.GetOrAddComponent<CustomWristStats>()
+            .SetHand(creature.handLeft)
+            .Refresh(this);
+        creature.handRight.wristStats.transform.GetOrAddComponent<CustomWristStats>()
+            .SetHand(creature.handRight)
+            .Refresh(this);
     }
 
     public bool FireAtCreature(Creature creature) {

@@ -10,6 +10,7 @@ using ThunderRoad.Skill;
 using ThunderRoad.Skill.Spell;
 using UnityEngine;
 using UnityEngine.AI;
+using Plane = UnityEngine.Plane;
 using Random = UnityEngine.Random;
 
 namespace Bladedancer; 
@@ -1092,6 +1093,40 @@ public class Blade : ThunderBehaviour, IStringable {
         customJointTarget = null;
     }
 
+    public Vector3 AimCorrection(Vector3 velocity, float maxDistance = 4, float maxAngle = 15) {
+        if (Quiver == null) return velocity;
+        var ray =  new Ray(transform.position, velocity);
+        
+        // if we'll hit something already return
+        if (Physics.Raycast(ray, maxDistance, Utils.GetLayerMask(LayerName.BodyLocomotion), QueryTriggerInteraction.Ignore))
+            return velocity;
+        
+        // if there's not much close return
+        if (AimAssist(ray, maxDistance, maxAngle * 2, out _,
+                Filter.EnemyOf(Quiver.creature), 0) is not Creature target) return velocity;
+        
+        // construct a plane on the enemy facing the player
+        var toChest = target.ragdoll.targetPart.transform.position - transform.position;
+        var plane = new Plane(toChest, target.ragdoll.targetPart.transform.position);
+        
+        // get the 2d point on that plane where the blade would have gone relative to the enemy
+        var orgTargetPoint = plane.Raycast(ray, out float enter) ? ray.GetPoint(enter) : Vector3.zero;
+        if (orgTargetPoint == Vector3.zero) return velocity;
+
+        // calculate error
+        var error = orgTargetPoint - target.ragdoll.targetPart.transform.position;
+        var targetPoint = target.ragdoll.targetPart.transform.position + error.normalized * Mathf.Clamp(error.magnitude * 0.4f, 0, 0.3f);
+        
+        // project on a vertical line to get a point centered on the enemy but at the input throw height
+        var toTarget = targetPoint - transform.position;
+        
+        if (Vector3.Angle(toTarget, velocity) < maxAngle) return toTarget.normalized * velocity.magnitude;
+        // var axis = Vector3.Cross(velocity, toChest);
+        // var angle = Vector3.SignedAngle(velocity, toChest, axis);
+        // return Quaternion.AngleAxis(maxAngle * (angle / Math.Abs(angle)), axis) * velocity;
+
+        return velocity;
+    }
     public static Creature AimAssist(
         Ray ray,
         float distance,

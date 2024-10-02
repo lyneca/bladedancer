@@ -16,6 +16,8 @@ public class CustomWristStats : ThunderBehaviour {
     public List<GameObject> indicatorList;
 
     private WristStats stats;
+    private RagdollHand hand;
+    private Quiver quiver;
     private bool isShown;
 
     public static int emissionPropertyID = Shader.PropertyToID("_BaseColor");
@@ -26,10 +28,16 @@ public class CustomWristStats : ThunderBehaviour {
         }
 
         creature = GetComponentInParent<Creature>();
+        quiver = Quiver.Get(creature);
         stats = GetComponent<WristStats>();
         creature.OnDespawnEvent += OnCreatureDespawn;
         indicators = new Dictionary<Blade, GameObject>();
         indicatorList = new List<GameObject>();
+    }
+
+    public CustomWristStats SetHand(RagdollHand hand) {
+        this.hand = hand;
+        return this;
     }
 
     private void OnChanged(object obj) {
@@ -42,6 +50,16 @@ public class CustomWristStats : ThunderBehaviour {
         base.ManagedUpdate();
         if (stats.isShown != isShown && (!stats.isShown || allowEnable))
             SetActive(stats.isShown);
+
+        if (isShown
+            && !quiver.IsEmpty
+            && hand.caster.other is
+                { isFiring: true, grabbedFire: false, spellInstance: SpellCastCharge { imbueEnabled: true } spell }
+            && Vector3.Distance(hand.caster.other.Orb.position, transform.position) < spell.imbueRadius / 2) {
+            quiver.Imbue(spell,
+                spell.imbueRate * spell.spellCaster.ChargeRatio / quiver.Count * Time.unscaledDeltaTime,
+                hand.creature);
+        }
     }
 
     public void SetActive(bool active) {

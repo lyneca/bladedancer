@@ -76,14 +76,24 @@ public class SpellCastBlade : SpellCastCharge {
     public static float throwForce = 12;
 
     [SkillCategory("Slingblade", Category.Base, 1, 0)]
-    [ModOptionSlider, ModOptionFloatValues(2, 10, 1)]
+    [ModOptionSlider, ModOptionFloatValues(2, 20, 1)]
     [ModOption("AI Throw Force", "Forced throw hand velocity for NPCs using Slingblade")]
-    public static float aiThrowForce = 7;
+    public static float aiThrowForce = 12;
 
     [SkillCategory("Slingblade", Category.Base, 1, 0)]
     [ModOptionSlider, ModOptionFloatValues(1, 5, 0.5f)]
     [ModOption("Gravity Force Compensation", "Force multiplier when throwing a Gravity-imbued blade using Slingblade")]
     public static float gravityForceCompensation = 3.5f;
+
+    [SkillCategory("Slingblade", Category.Base, 1, 0)]
+    [ModOptionSlider, ModOptionFloatValues(0, 10, 1f)]
+    [ModOption("Aim Assist Max Distance", "Maximum distance to look for creatures to aim assist towards")]
+    public static float aimAssistDistance = 5;
+
+    [SkillCategory("Slingblade", Category.Base, 1, 0)]
+    [ModOptionSlider, ModOptionFloatValues(0, 45, 1f)]
+    [ModOption("Aim Assist Max Angle", "Maximum angle to correct throw velocity to assist in hitting a creature")]
+    public static float aimAssistAngle = 30;
 
     [SkillCategory("Staff Slam", Category.Base, 1)]
     [ModOptionSlider, ModOptionIntValues(1, 12, 1)]
@@ -551,6 +561,7 @@ public class SpellCastBlade : SpellCastCharge {
         blade.Quiver = quiver;
         blade.item.lastHandler = spellCaster.ragdollHand;
         blade.item.OnDespawnEvent += ActiveBladeDespawn;
+        blade.AllowDespawn(false);
 
         if (isNew) {
             spawnEffectData?.Spawn(spellCaster.magicSource).Play();
@@ -604,6 +615,7 @@ public class SpellCastBlade : SpellCastCharge {
                 velocity = Vector3.Slerp(velocity.normalized,
                                spellCaster.mana.creature.ragdoll.headPart.transform.forward, 0.5f)
                            * velocity.magnitude;
+            velocity = activeBlade.AimCorrection(velocity, aimAssistDistance, aimAssistAngle);
             if (!activeBlade || !activeBlade.item) return;
             foreach (var eachImbue in activeBlade.item.imbues) {
                 if (eachImbue.spellCastBase is not SpellCastGravity) continue;
@@ -625,6 +637,7 @@ public class SpellCastBlade : SpellCastCharge {
         activeBlade.OnlyIgnoreRagdoll(spellCaster.mana.creature.ragdoll, true);
         activeBlade.AddForce(velocity * throwForce, ForceMode.VelocityChange, aimAssist, true, spellCaster.ragdollHand);
         activeBlade.item.lastHandler = spellCaster.ragdollHand;
+        activeBlade.AllowDespawn(true);
         activeBlade.wasSlung = true;
         Blade.slung.Add(activeBlade);
         lastThrownBlade = activeBlade;

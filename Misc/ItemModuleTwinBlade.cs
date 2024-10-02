@@ -143,6 +143,7 @@ public class TwinBladeBehaviour : ThunderBehaviour {
         if (!Quiver.Main.TryGetClosestBlade(GetTargetPos(index), out var blade)) return false;
 
         ReleaseDagger(index);
+        blade.IgnoreItem(item);
         heldBlades[index] = blade;
         blade.MoveTo(new MoveTarget(MoveMode.PID, 10)
             .Parent(group.transform)
@@ -187,7 +188,8 @@ public class TwinBladeBehaviour : ThunderBehaviour {
 
         heldBlades[index].Release(true, 0.5f);
         heldBlades[index].AddForce(velocity * SkillTwinBladeMaestro.throwMult, ForceMode.VelocityChange);
-
+        heldBlades[index].IgnoreItem(item, false);
+        
         if (Creature.AimAssist(GetTargetPos(index), velocity, 30, 30, out var target, Filter.EnemyOf(Player.currentCreature),
                 CreatureType.Golem | CreatureType.Human) is ThunderEntity entity) {
             heldBlades[index].HomeTo(entity, target);

@@ -38,7 +38,8 @@ public class ItemModuleTeacherBlade : ItemModule {
         Player.characterData.inventory.ClearPlayerInventory(true);
         Player.characterData.inventory.SetPlayerInventory(Player.local.creature.container.CloneContents());
         Player.characterData.SaveAsync();
-        DisplayMessage.instance.ShowMessage(new DisplayMessage.MessageData(ItemModuleTwinBlade.skillData.description, 0));
+        DisplayMessage.instance.ShowMessage(new DisplayMessage.MessageData(
+            LocalizationManager.Instance.TryGetLocalization("Skills", ItemModuleTwinBlade.skillData.description), 0));
     }
 }
 
@@ -141,6 +142,7 @@ public class TwinBladeBehaviour : ThunderBehaviour {
 
         if (!Quiver.Main.TryGetClosestBlade(GetTargetPos(index), out var blade)) return false;
 
+        ReleaseDagger(index);
         heldBlades[index] = blade;
         blade.MoveTo(new MoveTarget(MoveMode.PID, 10)
             .Parent(group.transform)

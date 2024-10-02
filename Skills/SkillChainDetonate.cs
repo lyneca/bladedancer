@@ -12,7 +12,7 @@ public class SkillChainDetonate : SkillData {
 
     public override void OnLateSkillsLoaded(SkillData skillData, Creature creature) {
         base.OnLateSkillsLoaded(skillData, creature);
-        var detonation = SkillCatalog.Data<SkillRemoteDetonation>();
+        var detonation = Catalog.GetData<SkillRemoteDetonation>("RemoteDetonation");
         effectData = detonation.explosionEffectData;
         detonation.OnDetonateHitEvent -= OnDetonateHit;
         detonation.OnDetonateHitEvent += OnDetonateHit;
@@ -43,7 +43,7 @@ public class SkillChainDetonate : SkillData {
     
     public override void OnSkillUnloaded(SkillData skillData, Creature creature) {
         base.OnSkillUnloaded(skillData, creature);
-        var detonation = SkillCatalog.Data<SkillRemoteDetonation>();
+        var detonation = Catalog.GetData<SkillRemoteDetonation>("RemoteDetonation");
         detonation.OnDetonateHitEvent -= OnDetonateHit;
         if (Quiver.TryGet(creature, out var quiver))
             quiver.OnBladeThrow -= OnBladeThrow;
@@ -75,7 +75,7 @@ public class SkillChainDetonate : SkillData {
 
     public void Explode(Vector3 position, bool chain = false) {
         effectData.Spawn(position, Quaternion.identity).Play();
-        var skill = SkillCatalog.Data<SkillRemoteDetonation>();
+        var skill = Catalog.GetData<SkillRemoteDetonation>("RemoteDetonation");
         foreach (var (thunderEntity, closestPoint) in ThunderEntity.InRadiusClosestPoint(
                      position, skill.radius)) {
             float magnitude = (closestPoint - position).magnitude;

@@ -11,6 +11,9 @@ namespace Bladedancer;
 
 public class Quiver : ThunderBehaviour {
     public static List<int> allowedQuiverItemHashIds;
+    public static Mesh bladeMesh;
+    public static Material bladeMat;
+    
     public const string MaxCount = "MaxCrownCount";
     
     [SkillCategory("Crown of Knives", Category.Base, 2)]
@@ -25,7 +28,7 @@ public class Quiver : ThunderBehaviour {
 
     [SkillCategory("Crown of Knives", Category.Base, 2)]
     [ModOption("Crown Mode", "Visual appearance of the crown.")]
-    public static CrownMode crownMode;
+    public static CrownMode crownMode = CrownMode.Arc;
 
     [SkillCategory("Crown of Knives", Category.Base, 2)]
     [ModOption("Holster on Crouch", "Whether Blades in the crown should attempt to holster themselves when you sneak.", defaultValueIndex = 0)]
@@ -35,6 +38,12 @@ public class Quiver : ThunderBehaviour {
     [ModOptionFloatValues(0, 3, 0.1f)]
     [ModOptionSlider, ModOption("Holster Crouch Delay", "How long you need to be crouched before the blades hide themselves")]
     public static float crouchDelay = 0f;
+    
+    [SkillCategory("Crown of Knives", Category.Base, 2)]
+    [ModOptionSlider, ModOptionFloatValues(0, 1, 0.1f)]
+    [ModOption("Crown Target Weapon Size", "Target size that weapons adapted into your quiver will try to shrink to.")]
+    public static float targetWeaponSize = 0.3f;
+
 
     public Creature creature;
     public Mode mode;
@@ -60,8 +69,11 @@ public class Quiver : ThunderBehaviour {
     public BoolHandler preventBlock;
 
 
+    public bool FullyEmpty => Count == 0 && !HasBladeInHolster();
     public bool IsFull => !ignoreCap && Count >= Max;
+    public bool IsEmpty => Count == 0;
     public int Max => MaxCountHandler == null ? 0 : Mathf.FloorToInt(MaxCountHandler);
+    public bool Active => creature.TryGetVariable(SkillCrownOfKnives.HasCrown, out bool hasCrown) && hasCrown;
 
     public static Quiver Main => Player.currentCreature ? Player.currentCreature.GetOrAddComponent<Quiver>() : null;
     public static bool TryGet(Creature creature, out Quiver quiver) {
@@ -75,6 +87,7 @@ public class Quiver : ThunderBehaviour {
     
     public delegate void BladeThrow(Quiver quiver, Blade blade);
     public event BladeThrow OnBladeThrow;
+    public event Blade.HitEntity OnBladeHit;
 
     public delegate void CountChangeEvent(Quiver quiver);
     public event CountChangeEvent OnCountChangeEvent;
@@ -95,6 +108,14 @@ public class Quiver : ThunderBehaviour {
                 RefreshQuiver();
             };
         }
+        
+        if (bladeMesh == null)
+            Catalog.LoadAssetAsync<Mesh>("Lyneca.Bladedancer.Crystal.Mesh", mesh => bladeMesh = mesh,
+                "BladedancerWristStats");
+
+        if (bladeMat == null)
+            Catalog.LoadAssetAsync<Material>("Lyneca.Bladedancer.SpellWheelMat", mat => bladeMat = mat,
+                "BladedancerWristStats");
 
         if (ModOptions.TryGetOption("Crown Spread Angle", out var crownSpreadAngleOption)) {
             crownSpreadAngleOption.ValueChanged += _ => RefreshQuiver();
@@ -165,7 +186,15 @@ public class Quiver : ThunderBehaviour {
     private bool cachedIsCrouching;
     private bool cachedIsIncapacitated;
 
-    public void InvokeBladeThrow(Blade blade) => OnBladeThrow?.Invoke(this, blade);
+    public void InvokeBladeThrow(Blade blade) {
+        OnBladeThrow?.Invoke(this, blade);
+        blade.OnHitEntity += BladeHit;
+    }
+
+    private void BladeHit(Blade blade, ThunderEntity entity, CollisionInstance hit) {
+        blade.OnHitEntity -= BladeHit;
+        OnBladeHit?.Invoke(blade, entity, hit);
+    }
 
     public void ForAllBlades(Action<Blade> action) {
         foreach (var blade in new List<Blade>(blades)) {
@@ -205,17 +234,16 @@ public class Quiver : ThunderBehaviour {
             || blade == null) return false;
 
         if (blades.Contains(blade)) return true;
-        bool quiverEnabled = creature.TryGetVariable(SkillCrownOfKnives.HasCrown, out bool hasCrown) && hasCrown;
 
-        if (IsFull || !quiverEnabled) {
+        if (IsFull || !Active) {
+            blade.item.StopFlying();
+            blade.item.StopThrowing();
+            blade.StopGuidance();
             if (!TryGetClosestFreeHolster(blade, out var holder) || !blade.TryDepositIn(holder)) return false;
             blade.Quiver = this;
             blade.InvokeAddToQuiver(this);
             blade.AllowDespawn(false);
             blade.SetTouch(false);
-            blade.item.StopFlying();
-            blade.item.StopThrowing();
-            blade.StopGuidance();
             return true;
         }
 
@@ -320,7 +348,12 @@ public class Quiver : ThunderBehaviour {
             }
         }
     }
-    public void FillFromHolsters() => StartCoroutine(FillFromHolstersRoutine());
+
+    public void FillFromHolsters() {
+        if (IsFull || !Active) return;
+        StartCoroutine(FillFromHolstersRoutine());
+    }
+
     public IEnumerator FillFromHolstersRoutine() {
         while (Count < Max) {
             if (TryGetBladeFromHolsters(creature.ragdoll.headPart.transform.position, out var blade)) {
@@ -433,6 +466,32 @@ public class Quiver : ThunderBehaviour {
         return true;
     }
 
+    public bool HasBladeInHolster() {
+        for (var i = 0; i < creature.holders.Count; i++) {
+            var eachHolder = creature.holders[i];
+            if (eachHolder.items.Count <= 0 || eachHolder.items[0] is not Item item) continue;
+
+            if (item.GetComponent<Blade>() != null) {
+                return true;
+            }
+
+            if (item.data.hashId == creature.GetBladeItemData().hashId) {
+                return true;
+            }
+
+            if (item.childHolders is { Count: > 0 }
+                && item.childHolders[0].items.Count > 0
+                && item.childHolders[0].items[0] is Item quiverHolsteredItem
+                && (allowedQuiverItemHashIds.Contains(item.data.hashId)
+                    || item.childHolders[0].items[0].data.hashId == Blade.GetBladeItemData(creature).hashId)
+               ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+    
     public bool TryGetBladeFromHolsters(Vector3 position, out Blade blade) {
         blade = null;
         for (var i = 0; i < creature.holders.Count; i++) {
@@ -595,7 +654,7 @@ public class Quiver : ThunderBehaviour {
     }
 
     public void RefreshUI() {
-        if (!creature.isPlayer) return;
+        if (!creature.isPlayer || !CustomWristStats.allowEnable) return;
         creature.handLeft.wristStats.transform.GetOrAddComponent<CustomWristStats>().Refresh(this);
         creature.handRight.wristStats.transform.GetOrAddComponent<CustomWristStats>().Refresh(this);
     }

@@ -1,7 +1,7 @@
 ﻿using ThunderRoad;
 using ThunderRoad.AI;
 
-namespace Bladedancer.Misc;
+namespace Bladedancer;
 
 public partial class HasAnySpell : ConditionNode {
     public override bool Evaluate() {

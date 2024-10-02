@@ -1,5 +1,4 @@
-﻿using Bladedancer.Misc;
-using ThunderRoad;
+﻿using ThunderRoad;
 using UnityEngine;
 
 namespace Bladedancer.Skills;

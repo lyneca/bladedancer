@@ -3,7 +3,7 @@ using JetBrains.Annotations;
 using ThunderRoad;
 using UnityEngine;
 
-namespace Bladedancer.Misc; 
+namespace Bladedancer; 
 
 public class SpellBladeMergeData : SpellMergeData {
     [SkillCategory("General", Category.Base)]

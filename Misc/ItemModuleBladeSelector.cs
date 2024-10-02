@@ -73,15 +73,19 @@ public class BladeSelector : ThunderBehaviour {
         magnet.OnItemReleaseEvent += OnItemRelease;
     }
 
-    private void OnItemCatch(Item item, EventTime time) {
-        if (time == EventTime.OnEnd || !shown || item.data == null || string.IsNullOrEmpty(item.data.id)) return;
+    private void OnItemCatch(Item caughtItem, EventTime time) {
+        if (time == EventTime.OnEnd || !shown || caughtItem.data == null || string.IsNullOrEmpty(caughtItem.data.id)) return;
         module.setEffectData?.Spawn(transform).Play();
-        magnet.transform.rotation = Quaternion.LookRotation(Vector3.ProjectOnPlane(item.ForwardVector(), Vector3.up));
-        Blade.SetCustomBlade(item.data.id);
+        magnet.transform.rotation = Quaternion.LookRotation(Vector3.ProjectOnPlane(caughtItem.ForwardVector(), Vector3.up));
+        item.Haptic(1);
+        caughtItem.Haptic(1);
+        Blade.SetCustomBlade(caughtItem.data.id);
     }
 
-    private void OnItemRelease(Item item, EventTime time) {
+    private void OnItemRelease(Item caughtItem, EventTime time) {
         if (time == EventTime.OnStart || !shown) return;
+        item.Haptic(1);
+        caughtItem.Haptic(1);
         module.unsetEffectData.Spawn(transform).Play();
         Blade.ClearCustomBlade();
     }
@@ -106,6 +110,7 @@ public class BladeSelector : ThunderBehaviour {
 
     public void Show(bool shown) {
         if (this.shown == shown) return;
+        item.Haptic(0.5f);
         this.shown = shown;
         if (shown) {
             magnet.transform.position = transform.position + Vector3.up * 0.3f;

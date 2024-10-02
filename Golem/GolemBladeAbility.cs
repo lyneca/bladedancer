@@ -1,22 +1,34 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using ThunderRoad;
 using ThunderRoad.Skill;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 namespace Bladedancer; 
 
 public class GolemBladeAbility : GolemAbility {
+    [SkillCategory("Golem", Category.Base)]
+    [ModOption("Golem Abilities", "Disable to turn off custom Golem abilities.")]
+    public static bool enable = true;
     public static float lastBladeTime;
     public float bladeCooldownDuration = 10f;
     public float maxDistance = 10f;
     public float startMaxAngle = 50;
-    public int maxBladeCount = 12;
     public float quiverSpread = 60f;
     public Vector2 duration = new(8, 12);
     
     public SpellCastCharge spell;
     public Dictionary<Golem.Tier, string[]> spellIds;
     public Dictionary<Golem.Tier, string[]> skillIds;
+
+    public Dictionary<Golem.Tier, int> maxBladeCount = new() {
+        { Golem.Tier.Tier1, 3 },
+        { Golem.Tier.Tier2, 6 },
+        { Golem.Tier.Tier3, 12 },
+        { Golem.Tier.Any, 12 },
+    };
+    
     public List<SpellSkillData> skills;
     
     public float currentDuration;
@@ -24,8 +36,18 @@ public class GolemBladeAbility : GolemAbility {
 
     public override bool HeadshotInterruptable => true;
 
+    public T GetTier<T>(Dictionary<Golem.Tier, T> dict, GolemController golem) {
+        if (dict.TryGetValue(golem.tier, out var value)) return value;
+        if (dict.TryGetValue(Golem.Tier.Any, out value)) return value;
+        if (dict.TryGetValue(Golem.Tier.Tier3, out value)) return value;
+        if (dict.TryGetValue(Golem.Tier.Tier2, out value)) return value;
+        if (dict.TryGetValue(Golem.Tier.Tier1, out value)) return value;
+        return default;
+    }
+
     public override bool Allow(GolemController golem)
         => base.Allow(golem)
+           && enable
            && Time.time - lastBladeTime > bladeCooldownDuration
            && golem.IsSightable(golem.attackTarget, maxDistance, startMaxAngle);
 
@@ -99,7 +121,7 @@ public class GolemBladeAbility : GolemAbility {
     public override void OnUpdate() {
         base.OnUpdate();
         if (state != State.Deploying
-            || blades.Count >= maxBladeCount
+            || blades.Count >= GetTier(maxBladeCount, golem)
             || Time.time - lastBladeSpawn < bladeSpawnDelay) return;
 
         lastBladeSpawn = Time.time;
@@ -117,7 +139,7 @@ public class GolemBladeAbility : GolemAbility {
         blade.item.OnDespawnEvent += OnBladeDespawn;
 
         Refresh();
-        if (state != State.Deploying || blades.Count != maxBladeCount) return;
+        if (state != State.Deploying || blades.Count != GetTier(maxBladeCount, golem)) return;
         state = State.Waiting;
         OnQuiverFull();
         return;
@@ -138,7 +160,7 @@ public class GolemBladeAbility : GolemAbility {
     public virtual void Refresh() {
         int count = blades.Count;
         for (var i = 0; i < blades.Count; i++) {
-            float maxSpread = (float)count / maxBladeCount * quiverSpread;
+            float maxSpread = (float)count / GetTier(maxBladeCount, golem) * quiverSpread;
             float half = (blades.Count - 1f) / 2;
             float offset = blades.Count == 1 ? 0 : (i - half) / half;
             blades[i].MoveTo(new MoveTarget(MoveMode.PID, 6)

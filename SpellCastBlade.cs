@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Bladedancer.Skills;
 using HarmonyLib;
 using SequenceTracker;
@@ -65,9 +66,9 @@ public class SpellCastBlade : SpellCastCharge {
     public static float pidDamping = 1;
 
     [SkillCategory("General")]
-    [ModOptionSlider, ModOptionFloatValues(0, 5, 1)]
+    [ModOptionSlider, ModOptionFloatValues(0, 5, 0.5f)]
     [ModOption("Despawn Time", "Time before a blade despawns or is collected")]
-    public static float collectTime = 3;
+    public static float collectTime = 1.5f;
 
     [SkillCategory("Slingblade", Category.Base, 1, 0)]
     [ModOptionSlider, ModOptionFloatValues(8, 20, 2)]
@@ -75,7 +76,7 @@ public class SpellCastBlade : SpellCastCharge {
     public static float throwForce = 12;
 
     [SkillCategory("Slingblade", Category.Base, 1, 0)]
-    [ModOptionSlider, ModOptionFloatValues(2, 10, 2)]
+    [ModOptionSlider, ModOptionFloatValues(2, 10, 1)]
     [ModOption("AI Throw Force", "Forced throw hand velocity for NPCs using Slingblade")]
     public static float aiThrowForce = 7;
 
@@ -147,6 +148,9 @@ public class SpellCastBlade : SpellCastCharge {
 
     private Trigger.CallBack orgImbueTriggerCallback;
     private bool hasReachedFullCharge;
+    private SpellCastBlade baseSpell;
+    private float orgAiCastMaxDistance;
+    private bool spawning;
 
     public void Localize(string group, string text) {
         Debug.Log($"{group}/{text}: \"{LocalizationManager.Instance.GetLocalizedString(group, text)}\"");
@@ -165,6 +169,8 @@ public class SpellCastBlade : SpellCastCharge {
     public override void OnCatalogRefresh() {
         base.OnCatalogRefresh();
 
+        orgAiCastMaxDistance = aiCastMaxDistance;
+
         var harmony = new Harmony("com.lyneca.bladedancer");
         harmony.PatchAll();
 
@@ -173,6 +179,9 @@ public class SpellCastBlade : SpellCastCharge {
         IngameDebugConsole.DebugLogConsole.AddCommand("localize", "Localize a string", Localize);
         
         EventManager.onPossess += OnPossess;
+
+        Debug.Log(
+            $"Bladedancer version {ModManager.GetModDataFromAssembly(Assembly.GetCallingAssembly().FullName)?.ModVersion ?? "[unknown]"}");
 
         Blade.defaultBladeId = defaultBladeId;
         Blade.defaultItemData = Catalog.GetData<ItemData>(defaultBladeId);
@@ -200,9 +209,11 @@ public class SpellCastBlade : SpellCastCharge {
         
         disableHandle = new BoolHandler(false);
         disableHandle.OnChangeEvent += DisableHandleChanged;
-        
+
         disableImbue = new BoolHandler(false);
-        disableImbue.OnChangeEvent += DisableImbueChanged;
+        if (imbueEnabled) {
+            disableImbue.OnChangeEvent += DisableImbueChanged;
+        }
 
         anchor = new GameObject().transform;
         anchor.transform.SetParent(spellCaster.ragdollHand.transform);
@@ -227,8 +238,8 @@ public class SpellCastBlade : SpellCastCharge {
             slingshotHandle.UnGrabbed += SlingshotHandleUnGrab;
         }
 
-        orgImbueTriggerCallback = spellCaster.imbueTrigger.callBack;
-        spellCaster.imbueTrigger.SetCallback(OnTriggerImbue);
+        // orgImbueTriggerCallback = spellCaster.imbueTrigger.callBack;
+        // spellCaster.imbueTrigger.SetCallback(OnTriggerImbue);
 
         root = Step.Start();
         SetupModifiers();
@@ -236,7 +247,7 @@ public class SpellCastBlade : SpellCastCharge {
     }
 
     private void DisableImbueChanged(bool oldValue, bool newValue) {
-        imbueEnabled = newValue;
+        imbueEnabled = !newValue;
         spellCaster.imbueTrigger.SetRadius(imbueEnabled ? imbueRadius : 0);
     }
 
@@ -252,7 +263,20 @@ public class SpellCastBlade : SpellCastCharge {
 
     public void Init() {
         quiver = Quiver.Get(spellCaster?.mana.creature ?? imbue.imbueCreature);
+        if (quiver == null) return;
+        for (var i = 0; i < quiver.creature.mana.spells.Count; i++) {
+            var spell = quiver.creature.mana.spells[i];
+            if (spell.hashId == hashId) {
+                baseSpell = spell as SpellCastBlade;
+                break;
+            }
+        }
         OnQuiverLoadEvent?.Invoke(this, quiver);
+        // if (baseSpell != null) {
+        //     quiver.OnCountChangeEvent += _ => {
+        //         baseSpell.aiCastMaxDistance = quiver.FullyEmpty ? 0 : orgAiCastMaxDistance;
+        //     };
+        // }
     }
 
     protected void OnTriggerImbue(Collider other, bool enter) {
@@ -315,7 +339,7 @@ public class SpellCastBlade : SpellCastCharge {
         base.Unload();
 
         if (spellCaster == null) return;
-        spellCaster.imbueTrigger.callBack = orgImbueTriggerCallback;
+        // spellCaster.imbueTrigger.callBack = orgImbueTriggerCallback;
         if (!spellCaster.ragdollHand.ragdoll.creature.isPlayer) {
             spellCaster.ragdollHand.ragdoll.forcePhysic.Remove(this);
         }
@@ -341,8 +365,9 @@ public class SpellCastBlade : SpellCastCharge {
             spellCaster.imbueTrigger.SetRadius(imbueRadius);
         } else {
             spellCaster.imbueTrigger.SetRadius(0);
-            spellCaster.imbueTrigger.SetActive(false);
         }
+        
+        spawning = false;
 
         if (active) {
             bool wasFreeCharge = FreeCharge;
@@ -373,8 +398,8 @@ public class SpellCastBlade : SpellCastCharge {
             } else {
                 if (wasFreeCharge) {
                     Blade.Spawn(blade => OnBladeSpawn(blade, true), HandPosition, HandRotation, spellCaster.mana.creature);
-                } else {
-                    Blade.GetOrSpawn(OnBladeSpawn, HandPosition, HandRotation, spellCaster.mana.creature);
+                } else if (!quiver.IsEmpty) {
+                    Blade.GetOrSpawn(OnBladeSpawn, HandPosition, HandRotation, spellCaster.mana.creature, !spellCaster.mana.creature.isPlayer);
                 }
             }
         } else {
@@ -448,7 +473,8 @@ public class SpellCastBlade : SpellCastCharge {
             handleActive = true;
         }
 
-        if (slingshotHandle && !slingshotHandle.IsHanded()) slingshotHandle.transform.position = spellCaster.magicSource.position;
+        if (slingshotHandle && !slingshotHandle.IsHanded())
+            slingshotHandle.transform.position = spellCaster.magicSource.position;
 
         if (lastThrownBlade
             && lastThrownBlade.guided
@@ -458,42 +484,60 @@ public class SpellCastBlade : SpellCastCharge {
         }
 
         if (root.AtEnd()) root.Reset();
-        if (!activeBlade) return;
 
-        if (currentCharge < 1) {
-            hasReachedFullCharge = false;
-            activeBlade.MoveTo(new MoveTarget(MoveMode.Joint, handJointLerp)
-                .Parent(spellCaster.magicSource)
-                .AtWorld(HandPosition, HandRotation));
-        } else if (!hasReachedFullCharge) {
-            hasReachedFullCharge = true;
-            activeBlade.MoveTo(new MoveTarget(MoveMode.Joint, handJointLerp)
-                .Parent(spellCaster.magicSource)
-                .AtWorld(HandPosition, HandRotation));
+        bool firing = spellCaster.isFiring
+                      && !spellCaster.isMerging
+                      && !spellCaster.mana.mergeActive
+                      && !spellCaster.ragdollHand.grabbedHandle;
+        if (firing
+            && !spawning
+            && !activeBlade
+            && (!quiver.IsEmpty || currentCharge == 1)) {
+            spawning = Blade.GetOrSpawn(OnBladeSpawn, HandPosition, HandRotation, spellCaster.mana.creature,
+                !spellCaster.mana.creature.isPlayer);
         }
 
-        activeBlade.transform.localScale = Vector3.one * currentCharge;
-        if (currentCharge > throwMinCharge) {
-            if (spellCaster.ragdollHand.creature.isPlayer
-                && spellCaster.ragdollHand.playerHand.controlHand.gripPressed
-                && !spellCaster.ragdollHand.grabbedHandle) {
-                var blade = activeBlade;
-                ReleaseBlade();
-                blade.item.StopFlying();
-                blade.item.StopThrowing();
-                var bladeHandle = blade.item.GetMainHandle(spellCaster.ragdollHand.side);
-                spellCaster.ragdollHand.Grab(bladeHandle,
-                    bladeHandle.GetNearestOrientation(spellCaster.ragdollHand.grip, spellCaster.ragdollHand.side), 0,
-                    true);
-                blade.item.IgnoreRagdollCollision(spellCaster.ragdollHand.ragdoll, spellCaster.ragdollHand.type);
-                return;
+        if (!firing) return;
+        
+        if (activeBlade) {
+            if (currentCharge < 1) {
+                hasReachedFullCharge = false;
+                activeBlade.MoveTo(new MoveTarget(MoveMode.Joint, handJointLerp)
+                    .Parent(spellCaster.magicSource)
+                    .AtWorld(HandPosition, HandRotation));
+            } else if (!hasReachedFullCharge) {
+                hasReachedFullCharge = true;
+                activeBlade.MoveTo(new MoveTarget(MoveMode.Joint, handJointLerp)
+                    .Parent(spellCaster.magicSource)
+                    .AtWorld(HandPosition, HandRotation));
             }
 
-            if (readyHaptic) return;
-            readyHaptic = true;
-            spellCaster.ragdollHand.HapticTick();
-        } else {
-            spellCaster.ragdollHand.HapticTick(currentCharge / 2);
+            activeBlade.transform.localScale = Vector3.one * currentCharge;
+            if (currentCharge > throwMinCharge && activeBlade) {
+                if (spellCaster.ragdollHand.creature.isPlayer
+                    && spellCaster.ragdollHand.playerHand.controlHand.gripPressed
+                    && !spellCaster.ragdollHand.grabbedHandle) {
+                    var blade = activeBlade;
+                    ReleaseBlade();
+                    blade.item.StopFlying();
+                    blade.item.StopThrowing();
+                    var bladeHandle = blade.item.GetMainHandle(spellCaster.ragdollHand.side);
+                    spellCaster.ragdollHand.Grab(bladeHandle,
+                        bladeHandle.GetNearestOrientation(spellCaster.ragdollHand.grip, spellCaster.ragdollHand.side),
+                        0,
+                        true);
+                    blade.RunAfter(
+                        () => blade.item.IgnoreRagdollCollision(spellCaster.ragdollHand.ragdoll,
+                            spellCaster.ragdollHand.type), 0.1f);
+                    return;
+                }
+
+                if (readyHaptic && activeBlade) return;
+                readyHaptic = true;
+                spellCaster.ragdollHand.HapticTick();
+            }
+        } else if (!quiver.FullyEmpty) {
+            spellCaster.ragdollHand.HapticTick(currentCharge * 0.3f);
         }
     }
 
@@ -530,7 +574,7 @@ public class SpellCastBlade : SpellCastCharge {
         void ActiveBladeDespawn(EventTime time) {
             blade.item.OnDespawnEvent -= ActiveBladeDespawn;
             if (activeBlade == blade && activeBlade != null) {
-                Fire(false);
+                spellCaster.Fire(false);
             }
         }
     }
@@ -541,13 +585,25 @@ public class SpellCastBlade : SpellCastCharge {
         Init();
     }
 
+    public override bool OnImbueCollisionStart(CollisionInstance hit) {
+        bool fired = base.OnImbueCollisionStart(hit);
+        if (hit.targetColliderGroup?.collisionHandler?.ragdollPart is not RagdollPart part
+            || part.ragdoll.creature.isPlayer
+            || part.ragdoll.creature.isKilled) return false;
+
+        Debug.Log("Inflicting bleeding");
+        part.ragdoll.creature.Inflict("Bleeding", this, Mathf.Infinity, part);
+        return fired;
+    }
+
     public override void Throw(Vector3 velocity) {
         base.Throw(velocity);
         // velocity = spellCaster.ragdollHand.Velocity() + spellCaster.ragdollHand.creature.currentLocomotion.velocity;
         if (spellCaster.mana.creature.isPlayer) {
-            velocity = Vector3.Slerp(velocity.normalized, spellCaster.mana.creature.ragdoll.headPart.transform.forward,
-                           0.5f)
-                       * velocity.magnitude;
+            if (Vector3.Angle(velocity.normalized, spellCaster.mana.creature.ragdoll.headPart.transform.forward) < 30)
+                velocity = Vector3.Slerp(velocity.normalized,
+                               spellCaster.mana.creature.ragdoll.headPart.transform.forward, 0.5f)
+                           * velocity.magnitude;
             if (!activeBlade || !activeBlade.item) return;
             foreach (var eachImbue in activeBlade.item.imbues) {
                 if (eachImbue.spellCastBase is not SpellCastGravity) continue;

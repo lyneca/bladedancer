@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using ThunderRoad;
 using ThunderRoad.Skill.Spell;
@@ -110,13 +113,55 @@ public static class Fixes {
     
 }
 
+public interface IStringable {
+    public string Stringify();
+}
+
+public static class Misc {
+    public static string HexHash(int id) {
+        return id.ToString("x8").Substring(2);
+    }
+}
+
 public class Debug {
-    public static void Log(params object[] args) {
-        UnityEngine.Debug.Log("[Bladedancer] " + string.Join(" ", args));
+    public static string Stringify(object obj) {
+        switch (obj) {
+            case IStringable stringable:
+                return stringable.Stringify();
+            case IList argList:
+                var list = new List<string>();
+                for (var i = 0; i < argList.Count; i++) {
+                    list.Add(Stringify(argList[i]));
+                }
+
+                return "[ " + string.Join(", ", list) + " ]";
+            case IDictionary argDict:
+                var pairs = new List<string>();
+                foreach (var key in argDict.Keys) {
+                    pairs.Add($"{key}: {argDict[key]}");
+                }
+
+                return "{ " + string.Join(", ", pairs) + " }";
+            default:
+                return obj.ToString();
+        }
+    }
+
+    public static string Stringify(object[] args) {
+        var list = new List<string>();
+        for (var i = 0; i < args.Length; i++) {
+            list.Add(Stringify(args[i]));
+        }
+
+        return string.Join(" ", list);
+    }
+
+public static void Log(params object[] args) {
+        UnityEngine.Debug.Log("[Bladedancer] " + Stringify(args));
     }
 
     public static void LogWarning(params object[] args) {
-        UnityEngine.Debug.LogWarning("[Bladedancer] " + string.Join(" ", args));
+        UnityEngine.Debug.LogWarning("[Bladedancer] " + Stringify(args));
     }
 
     public static void LogException(Exception exception) {
@@ -124,11 +169,15 @@ public class Debug {
     }
 
     public static void LogError(params object[] args) {
-        UnityEngine.Debug.LogError("[Bladedancer] " + string.Join(" ", args));
+        UnityEngine.Debug.LogError("[Bladedancer] " + Stringify(args));
     }
 }
 
 public static class Extension {
+    public static void BackupSet<T>(ref T original, ref T backup, T value) {
+        backup = original;
+        original = value;
+    }
     public static Vector3 ForwardVector(this Item item) {
         if (item.flyDirRef) {
             return item.flyDirRef.forward;

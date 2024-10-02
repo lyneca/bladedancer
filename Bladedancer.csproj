@@ -66,6 +66,9 @@
         <Reference Include="UnityEngine">
           <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.dll</HintPath>
         </Reference>
+        <Reference Include="UnityEngine.AIModule">
+          <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.AIModule.dll</HintPath>
+        </Reference>
         <Reference Include="UnityEngine.AnimationModule">
           <HintPath>D:\Games\Steam\steamapps\common\Blade &amp; Sorcery\BladeAndSorcery_Data\Managed\UnityEngine.AnimationModule.dll</HintPath>
         </Reference>
@@ -86,6 +89,7 @@
         </Reference>
     </ItemGroup>
     <ItemGroup>
+        <Compile Include="Golem\GolemSwirlingKnives.cs" />
         <Compile Include="Golem\GolemBladeAbility.cs" />
         <Compile Include="Golem\GolemBladeRain.cs" />
         <Compile Include="Golem\GolemBladeStorm.cs" />
@@ -93,24 +97,26 @@
         <Compile Include="Misc\CustomBladeContent.cs" />
         <Compile Include="Misc\CustomWristStats.cs" />
         <Compile Include="Misc\ItemModuleBladeSelector.cs" />
+        <Compile Include="Misc\ItemModuleTwinBlade.cs" />
+        <Compile Include="Misc\ItemModuleWristBlade.cs" />
+        <Compile Include="Misc\Misc.cs" />
+        <Compile Include="Misc\ModOptions.cs" />
         <Compile Include="Misc\Patches.cs" />
         <Compile Include="Misc\ItemModuleCustomCrystal.cs" />
         <Compile Include="Misc\CustomLoreAdder.cs" />
-        <Compile Include="SecretSpawner.cs" />
+        <Compile Include="Misc\PID.cs" />
+        <Compile Include="Misc\Quiver.cs" />
         <Compile Include="Blade.cs" />
-        <Compile Include="ItemModuleTwinBlade.cs" />
-        <Compile Include="Misc.cs" />
         <Compile Include="Misc\HasAnySpell.cs" />
+        <Compile Include="Misc\SecretSpawner.cs" />
+        <Compile Include="Misc\SequenceTracker.cs" />
         <Compile Include="Misc\SpellBladeMergeData.cs" />
-        <Compile Include="ModOptions.cs" />
-        <Compile Include="PID.cs" />
-        <Compile Include="Quiver.cs" />
-        <Compile Include="SequenceTracker.cs" />
         <Compile Include="Skills\NPC\SkillCustomBlade.cs" />
         <Compile Include="Skills\NPC\SkillImbueBlades.cs" />
         <Compile Include="Skills\NPC\SkillStartWithFullCrown.cs" />
         <Compile Include="Skills\SkillArchersGavotte.cs" />
         <Compile Include="Skills\SkillArcOfDaeKvir.cs" />
+        <Compile Include="Skills\SkillPsyblades.cs" />
         <Compile Include="Skills\SkillFiresGuidance.cs" />
         <Compile Include="Skills\SkillKnifethief.cs" />
         <Compile Include="Skills\SkillStormVolley.cs" />
@@ -134,6 +140,10 @@
         <Compile Include="Skills\SkillVortexBlender.cs" />
         <Compile Include="SpellCastBlade.cs" />
         <Compile Include="Properties\AssemblyInfo.cs"/>
+        <Compile Include="Status\Bleeding.cs" />
+        <Compile Include="Status\Disoriented.cs" />
+        <Compile Include="Status\StatusDataBleeding.cs" />
+        <Compile Include="Status\StatusDataDisoriented.cs" />
     </ItemGroup>
     <ItemGroup>
       <None Include="App.config" />

@@ -1,13 +1,14 @@
 ﻿using System.Collections.Generic;
 using ThunderRoad;
+using ThunderRoad.DebugViz;
 using UnityEngine;
 
 namespace Bladedancer; 
 
 public class CustomWristStats : ThunderBehaviour {
     [SkillCategory("Crown of Knives", Category.Base, 2)]
-    [ModOptionSlider, ModOption("Show Crown UI On Wrist", "Show or hide the crown wrist UI. Off by default as it can break things pretty significantly.", defaultValueIndex = 0)]
-    public static bool allowEnable;
+    [ModOptionSlider, ModOption("Show Crown UI On Wrist", "Show or hide the crown wrist UI.")]
+    public static bool allowEnable = true;
     public override ManagedLoops EnabledManagedLoops => ManagedLoops.Update;
 
     public Creature creature;
@@ -17,13 +18,13 @@ public class CustomWristStats : ThunderBehaviour {
     private WristStats stats;
     private bool isShown;
 
-    public static int emissionPropertyID = Shader.PropertyToID("_EmissionColor");
-    public static int useEmissionPropertyID = Shader.PropertyToID("_UseEmission");
+    public static int emissionPropertyID = Shader.PropertyToID("_BaseColor");
 
     private void Awake() {
         if (ModOptions.TryGetOption("Show Crown UI On Wrist", out ModOption option)) {
             option.ValueChanged += OnChanged;
         }
+
         creature = GetComponentInParent<Creature>();
         stats = GetComponent<WristStats>();
         creature.OnDespawnEvent += OnCreatureDespawn;
@@ -56,12 +57,32 @@ public class CustomWristStats : ThunderBehaviour {
         var newList = new List<GameObject>();
         
         for (var i = 0; i < quiver.blades.Count; i++) {
-            if (indicators.ContainsKey(quiver.blades[i])) {
-                newList.Add(indicators[quiver.blades[i]]);
+            var blade = quiver.blades[i];
+            if (indicators.TryGetValue(blade, out var indicator)) {
+                newList.Add(indicator);
             } else {
-                var mesh = CloneMeshFromBlade(quiver.blades[i]);
-                indicators[quiver.blades[i]] = mesh;
-                newList.Add(indicators[quiver.blades[i]]);
+                var mesh = CreateBladeMesh();
+                
+                var linker = mesh.AddComponent<ImbueEmissionLinker>();
+                linker.target = mesh.AddComponent<MaterialInstance>();
+                if (blade.item.colliderGroups.Count > 0) {
+                    for (var j = 0; j < blade.item.colliderGroups.Count; j++) {
+                        if (blade.item.colliderGroups[j].imbue is Imbue imbue) {
+                            Debug.Log("Linking blade mesh to blade imbue");
+                            linker.imbue = imbue;
+                            imbue.OnImbueSpellChange += (imbue, data, amount, change, time) => {
+                                if (time == EventTime.OnEnd)
+                                    linker.Refresh();
+                            };
+
+                            break;
+                        }
+                    }
+                }
+                linker.Refresh();
+
+                indicators[blade] = mesh;
+                newList.Add(indicators[blade]);
             }
         }
 
@@ -80,7 +101,6 @@ public class CustomWristStats : ThunderBehaviour {
             indicatorList = newList;
 
             int count = indicatorList.Count;
-
             for (var i = 0; i < indicatorList.Count; i++) {
                 float maxSpread = (float)count / quiver.Max * Quiver.quiverSpread;
                 float half = (count - 1f) / 2;
@@ -95,78 +115,19 @@ public class CustomWristStats : ThunderBehaviour {
         }
     }
 
+    public GameObject CreateBladeMesh() {
+        var mesh = new GameObject();
+        mesh.gameObject.AddComponent<MeshFilter>().mesh = Quiver.bladeMesh;
+        mesh.gameObject.AddComponent<MeshRenderer>().material = Instantiate(Quiver.bladeMat);
+        mesh.gameObject.transform.SetParent(transform);
+        mesh.gameObject.transform.localScale = Vector3.one * 0.1f;
+        return mesh;
+    }
+
     public void OnCreatureDespawn(EventTime time) {
         if (time == EventTime.OnEnd) return;
         creature.OnDespawnEvent -= OnCreatureDespawn;
         Destroy(this);
-    }
-
-    public GameObject CloneMeshFromBlade(Blade blade) {
-        var meshes = blade.gameObject.GetComponentsInChildren<MeshFilter>();
-        var obj = new GameObject($"indicator-{blade.item.data.id}");
-        obj.transform.SetPositionAndRotation(blade.item.Center, blade.ForwardRotation);
-        obj.transform.localScale = blade.transform.localScale;
-        var clones = new List<MeshRenderer>();
-        for (var i = 0; i < meshes.Length; i++) {
-            var mesh = meshes[i];
-            var meshRenderer = mesh.GetComponent<MeshRenderer>();
-            if (meshRenderer != null)
-                Debug.Log($"Found {meshRenderer} on item {blade.item} with {meshRenderer.materials.Length} material(s)");
-            if (meshRenderer == null || !meshRenderer.enabled || meshRenderer.materials.Length == 0) continue;
-            Debug.Log($"Creating indicator component for mesh {mesh}");
-            var clone = new GameObject().AddComponent<MeshFilter>();
-            clone.mesh = Instantiate(mesh.mesh);
-            clone.transform.SetParent(mesh.transform.parent);
-            clone.transform.localPosition = mesh.transform.localPosition;
-            clone.transform.localRotation = mesh.transform.localRotation;
-            clone.transform.localScale = mesh.transform.localScale;
-            clone.transform.SetParent(obj.transform);
-            var cloneRenderer = clone.gameObject.AddComponent<MeshRenderer>();
-            cloneRenderer.material = Instantiate(meshRenderer.material);
-            Imbue imbue = null;
-            for (var j = 0; j < blade.item.colliderGroups.Count; j++) {
-                if (blade.item.colliderGroups[j].imbueEmissionRenderer == meshRenderer) {
-                    imbue = blade.item.colliderGroups[j].imbue;
-                    break;
-                }
-            }
-
-            if (imbue != null) {
-                var linker = clone.gameObject.AddComponent<ImbueEmissionLinker>();
-                linker.imbue = imbue;
-                linker.target = cloneRenderer.gameObject.AddComponent<MaterialInstance>();
-                linker.Refresh();
-                imbue.OnImbueSpellChange += ImbueSpellChange;
-
-                void ImbueSpellChange(
-                    Imbue thisImbue,
-                    SpellCastCharge spell,
-                    float amount,
-                    float change,
-                    EventTime time) {
-                    if (enabled && time == EventTime.OnEnd) {
-                        linker.Refresh();
-                    }
-                }
-            }
-            clones.Add(cloneRenderer);
-        }
-
-        obj.transform.position = Vector3.zero;
-        obj.transform.rotation = Quaternion.identity;
-        var bounds = new Bounds();
-        for (var i = 0; i < clones.Count; i++) {
-            bounds.Encapsulate(clones[i].bounds);
-        }
-
-        var largestAxis = bounds.size.x > bounds.size.y ? Axis.X : Axis.Y;
-        largestAxis = bounds.size.GetAxis(largestAxis) > bounds.size.z ? largestAxis : Axis.Z;
-        float largestAxisSize = bounds.size.GetAxis(largestAxis);
-        obj.transform.localScale = Vector3.one * Mathf.Clamp01(0.02f / largestAxisSize);
-        obj.transform.position = transform.position;
-        obj.transform.rotation = transform.rotation;
-        obj.transform.SetParent(transform);
-        return obj;
     }
 }
 
@@ -176,9 +137,8 @@ public class ImbueEmissionLinker : ThunderBehaviour {
 
     public void Refresh() {
         if (target == null) return;
+        target.material.SetColor(CustomWristStats.emissionPropertyID, Color.white * 0.5f);
         if (imbue == null || imbue.spellCastBase == null || imbue.energy == 0) {
-            target.material.SetFloat(CustomWristStats.useEmissionPropertyID, 1f);
-            target.material.SetColor(CustomWristStats.emissionPropertyID, Color.black);
             return;
         }
 

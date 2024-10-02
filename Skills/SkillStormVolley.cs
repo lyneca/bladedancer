@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using Bladedancer.Misc;
 using ThunderRoad;
 using ThunderRoad.Skill;
 using ThunderRoad.Skill.Spell;
@@ -11,7 +10,7 @@ public class SkillStormVolley : SpellBladeMergeData {
     [SkillCategory("Storm Volley", Category.Base | Category.Lightning, 3)]
     [ModOptionFloatValues(0.05f, 0.3f, 0.05f)]
     [ModOptionSlider, ModOption("Storm Volley Size", "Distance between daggers in Storm Volley.")]
-    public static float size = 0.2f;
+    public static float size = 0.3f;
     
     [SkillCategory("Storm Volley", Category.Base | Category.Lightning, 3)]
     [ModOptionFloatValues(1f, 30f, 1f)]
@@ -31,7 +30,7 @@ public class SkillStormVolley : SpellBladeMergeData {
     [SkillCategory("Storm Volley", Category.Base | Category.Lightning, 3)]
     [ModOptionFloatValues(0.5f, 2f, 0.1f)]
     [ModOptionSlider, ModOption("Storm Volley Player Distance (Spraying)", "How far the daggers float from the player while spraying")]
-    public static float sprayDistanceFromPlayer = 0.6f;
+    public static float sprayDistanceFromPlayer = 0.5f;
     
     [SkillCategory("Storm Volley", Category.Base | Category.Lightning, 3)]
     [ModOptionFloatValues(0f, 1, 0.1f)]

@@ -59,7 +59,7 @@ public class SkillTidalPull : SpellSkillData {
     }
 
     private void OnCollisionStart(CollisionInstance hit) {
-        if (hit.sourceColliderGroup?.collisionHandler?.item is not Item item) return;
+        if (hit.sourceColliderGroup?.collisionHandler?.item is not Item item || item.mainHandler?.creature.isPlayer == true) return;
         item.mainCollisionHandler.OnCollisionStartEvent -= OnCollisionStart;
         if (!item.TryGetVariable(HasThrown, out bool thrown) || !thrown) return;
         item.SetVariable(HasThrown, false);

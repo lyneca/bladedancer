@@ -5,12 +5,13 @@ using UnityEngine.Serialization;
 namespace Bladedancer; 
 
 public class GolemBladeRain : GolemBladeAbility {
+    [SkillCategory("Golem", Category.Base)]
+    [ModOptionFloatValues(0.1f, 2f, 0.1f)]
+    [ModOptionSlider, ModOption("Golem Blade Rain Velocity", "How fast daggers are fired from the Golem's Blade Rain ability.")]
+    public float velocityMult = 0.5f;
+    
     public float fireDelay = 0.2f;
     public float lastBladeFire;
-
-    protected override void OnDeployed() {
-        base.OnDeployed();
-    }
 
     public override void OnUpdate() {
         base.OnUpdate();
@@ -35,6 +36,6 @@ public class GolemBladeRain : GolemBladeAbility {
         }
 
         var vector = golem.attackTarget.transform.position - blade.transform.position;
-        blade.AddForce(vector.normalized * 50f, ForceMode.VelocityChange, false, true);
+        blade.AddForce(vector.normalized * 50f * velocityMult, ForceMode.VelocityChange, false, true);
     }
 }

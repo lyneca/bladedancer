@@ -9,12 +9,18 @@ using ThunderRoad.DebugViz;
 using ThunderRoad.Skill;
 using ThunderRoad.Skill.Spell;
 using UnityEngine;
+using UnityEngine.AI;
+using Random = UnityEngine.Random;
 
 namespace Bladedancer; 
 
-public class Blade : ThunderBehaviour {
+public class Blade : ThunderBehaviour, IStringable {
     public const string ContainerName = "DeleteMeIfYouUninstallBladedancer";
     public const string BladeItem = "BladeItem";
+
+    [SkillCategory("General", Category.Base)]
+    [ModOption("Blade Spawning", "Whether a blade will be spawned when needed if you have none on your person.")]
+    public static bool allowSpawn;
     
     public Item item;
     public static string defaultBladeId;
@@ -109,6 +115,13 @@ public class Blade : ThunderBehaviour {
     private float retrieveDelay;
     private bool vizEnabled;
 
+    protected NavMeshPath navPath;
+    public bool wandering;
+    private float wanderRadius;
+    private Vector3 wanderCenter;
+    private Vector3 wanderTarget;
+    private int wanderIndex;
+
     public Quiver Quiver {
         get => _quiver;
         set {
@@ -148,21 +161,15 @@ public class Blade : ThunderBehaviour {
             Player.characterData.SaveAsync();
     }
     public static ItemData LoadSavedCustomBlade() {
-        Debug.Log("Attempting to get custom blade");
         if (Player.characterData == null
             || !Player.characterData.TryGetContainer(ContainerName, out var contents)) return null;
-        Debug.Log($"Found container with {contents.Count} entries");
 
         for (var i = 0; i < contents.Count; i++) {
-            Debug.Log(contents[i]);
-            Debug.Log(contents[i].referenceID);
-            Debug.Log(Catalog.TryGetData(contents[i].referenceID, out ItemData _));
             if (contents[i] is not CustomBladeContent bladeContent
                 || !Catalog.TryGetData(bladeContent.referenceID, out ItemData item)) continue;
-            Debug.Log($"Found item {item.id}");
+            Debug.Log($"Loaded custom blade {item.data.id}");
             return item;
         }
-        Debug.Log("Could not find any items :(");
 
         return null;
     }
@@ -171,8 +178,6 @@ public class Blade : ThunderBehaviour {
         if (creature && creature.TryGetVariable(BladeItem, out ItemData data)) return data;
         return defaultItemData;
     }
-
-
 
     public bool IsValid
         => item
@@ -187,20 +192,23 @@ public class Blade : ThunderBehaviour {
            && !float.IsInfinity(item.transform.position.z)
            && (item.transform.position - Player.local.transform.position).sqrMagnitude < 500 * 500;
 
-    public static void GetOrSpawn(
+    public static bool GetOrSpawn(
         Action<Blade, bool> callback,
         Vector3 position,
         Quaternion rotation,
-        Creature creature) {
+        Creature creature,
+        bool forceSpawn = false) {
         if (Quiver.TryGet(creature, out var quiver)
             && quiver.TryGetClosestBlade(position, out var quiverBlade)) {
             callback(quiverBlade, false);
-            return;
+            return true;
         }
         
-        Spawn(blade => callback(blade, true), position, rotation, creature);
+        if (allowSpawn || forceSpawn)
+            return Spawn(blade => callback(blade, true), position, rotation, creature);
+        return false;
     }
-    public static void Spawn(
+    public static bool Spawn(
         Action<Blade> callback,
         Vector3 position,
         Quaternion rotation,
@@ -209,7 +217,7 @@ public class Blade : ThunderBehaviour {
         var data = GetBladeItemData(creature);
         if (data == null) {
             Debug.LogWarning($"Blade item data is null for creature '{creature}'?");
-            return;
+            return false;
         }
         data.SpawnAsync(item => {
             var blade = item.GetOrAddComponent<Blade>();
@@ -220,6 +228,7 @@ public class Blade : ThunderBehaviour {
                 blade.item.data.flags &= ~ItemFlags.Piercing;
             callback(blade);
         }, position, rotation);
+        return true;
     }
 
     public static bool TryGetClosestSlungInRadius(Vector3 position, float radius, out Blade closest, Quiver ignoreQuiver = null) {
@@ -247,7 +256,6 @@ public class Blade : ThunderBehaviour {
         item.mainCollisionHandler.OnCollisionStartEvent += OnCollisionStart;
         item.DisallowDespawn = true;
         item.data.moduleAI = null;
-
         isMetal = new Dictionary<ColliderGroup, bool>();
         for (var i = 0; i < item.colliderGroups.Count; i++) {
             isMetal[item.colliderGroups[i]] = item.colliderGroups[i].isMetal;
@@ -260,7 +268,7 @@ public class Blade : ThunderBehaviour {
         largestAxis = localBounds.size.GetAxis(largestAxis) > localBounds.size.z ? largestAxis : Axis.Z;
 
         orgLargestAxisSize = localBounds.size.GetAxis(largestAxis);
-        scaleRatio = Mathf.Clamp01(SkillVersatility.targetWeaponSize / orgLargestAxisSize);
+        scaleRatio = Mathf.Clamp01(Quiver.targetWeaponSize / orgLargestAxisSize);
         orgMass = item.physicBody.mass;
         // orgCustomCenterOfMass = item.customCenterOfMass;
         scaledMass = item.physicBody.mass * scaleRatio;
@@ -490,7 +498,6 @@ public class Blade : ThunderBehaviour {
 
     public IEnumerator DespawnRoutine() {
         despawning.Add(this);
-        Debug.Log(SpellCastBlade.collectTime);
         yield return new WaitForSeconds(retrieveDelay == -1 ? SpellCastBlade.collectTime : retrieveDelay);
         retrieveDelay = -1;
         despawning.Remove(this);
@@ -511,6 +518,7 @@ public class Blade : ThunderBehaviour {
         item.StopThrowing();
         item.StopFlying();
         item.lastHandler = quiver.creature.handRight;
+        item.FullyUnpenetrate();
         if ((shouldRetrieve || force)
             && quiver
             && quiver.creature
@@ -524,7 +532,8 @@ public class Blade : ThunderBehaviour {
         if (!holder.ObjectAllowed(item) || !holder.HasSlotFree()) return false;
         if (InQuiver) Quiver.RemoveFromQuiver(this);
         OnlyIgnoreRagdoll(Quiver.creature.ragdoll);
-        MoveTo(new MoveTarget(MoveMode.PID, 6)
+        MoveTo(new MoveTarget(MoveMode.PID, 16)
+            .Intangible(true)
             .Parent(holder.transform)
             .LookAt(holder.transform)
             .OnReach(blade => {
@@ -665,12 +674,53 @@ public class Blade : ThunderBehaviour {
         hasResetAfterFree = true;
     }
 
+    public void RefreshWander() {
+        var circle = Random.insideUnitCircle * wanderRadius;
+        wanderTarget = wanderCenter + new Vector3(circle.x, 2, circle.y);
+        navPath = new NavMeshPath();
+        var start = NavMesh.SamplePosition(transform.position, out var hitStart, 10, NavMesh.AllAreas)
+            ? hitStart.position
+            : transform.position;
+        var end = NavMesh.SamplePosition(wanderTarget, out var hitEnd, 10, NavMesh.AllAreas)
+            ? hitEnd.position
+            : wanderTarget;
+
+        NavMesh.CalculatePath(start, end, NavMesh.AllAreas, navPath);
+
+        if (navPath == null) {
+            wandering = false;
+            Debug.Log("Null nav path");
+            return;
+        }
+
+        if (navPath.status is NavMeshPathStatus.PathInvalid || navPath.corners.Length < 2) {
+            Release();
+            Debug.Log($"Invalid nav path ({navPath.status}), length {navPath.corners.Length}");
+            return;
+        }
+
+        wanderIndex = 1;
+        MoveTo(
+            new MoveTarget(MoveMode.PID, 3).At(navPath.corners[wanderIndex] + Vector3.up * 0.5f), false);
+    }
+
     protected override void ManagedFixedUpdate() {
         base.ManagedFixedUpdate();
         if (item == null || !item.loaded) return;
+
+        if (wandering) {
+            if (navPath == null || Vector3.Distance(transform.position, wanderTarget) < 2) RefreshWander();
+            if (navPath != null && Vector3.Distance(transform.position, wanderTarget) < 2) {
+                if (++wanderIndex >= navPath.corners.Length)
+                    RefreshWander();
+                MoveTo(
+                    new MoveTarget(MoveMode.PID, 3).At(navPath.corners[wanderIndex] + Vector3.up * 0.5f), false);
+            }
+        }
+
         Move();
 
-        if (InQuiver)
+        if (InQuiver || MoveTarget?.intangible == true)
             SetIntangible(MoveTarget is MoveTarget target
                           && (transform.position - target.Get.position).sqrMagnitude
                           > SpellCastBlade.intangibleThreshold * SpellCastBlade.intangibleThreshold);
@@ -701,7 +751,8 @@ public class Blade : ThunderBehaviour {
         }
     }
 
-    public void MoveTo(MoveTarget? target) {
+    public void MoveTo(MoveTarget? target, bool stopWandering = true) {
+        if (stopWandering) wandering = false;
         MoveTarget = target;
         if (moveTarget is MoveTarget newTarget && newTarget.scale != lastScaleMode) finishedScaling = false;
         item.data.drainImbueWhenIdle = false;
@@ -713,6 +764,7 @@ public class Blade : ThunderBehaviour {
     /// <param name="now">Immediately stop all joints and movement, versus doing so at the next update loop.</param>
     public void CancelMovement(bool now = false) {
         MoveTarget = null;
+        wandering = false;
         if (now) Move();
     }
 
@@ -764,6 +816,13 @@ public class Blade : ThunderBehaviour {
             ScaleInstantly(ScaleMode.FullSize);
         item.Throw();
         item.lastHandler ??= Player.currentCreature.handLeft;
+    }
+
+    public void Wander(Vector3 position, float radius) {
+        wanderCenter = position;
+        wanderRadius = radius;
+        wandering = true;
+        RefreshWander();
     }
 
     public void SetTouch(bool enabled) {
@@ -1067,7 +1126,7 @@ public class Blade : ThunderBehaviour {
     public void AddForce(Vector3 force, ForceMode forceMode, bool aimAssist = false, bool resetVelocity = false, RagdollHand hand = null) {
         throwTime = Time.time;
         if (resetVelocity) {
-            item.physicBody.velocity = Vector3.zero;
+            item.physicBody.velocity = hand?.creature.currentLocomotion.velocity ?? Vector3.zero;
         }
 
         var position = hand?.caster.magicSource.position ?? transform.position;
@@ -1142,6 +1201,17 @@ public class Blade : ThunderBehaviour {
             }
         }
     }
+
+    public string Stringify() {
+        var imbue = "";
+        for (var i = 0; i < item.imbues.Count; i++) {
+            if (item.imbues[i].spellCastBase != null) {
+                imbue = $"{item.imbues[i].spellCastBase.id} ";
+            }
+        }
+
+        return $"{imbue}Blade #{Misc.HexHash(GetInstanceID())}";
+    }
 }
 
 public enum MoveMode {
@@ -1157,6 +1227,7 @@ public struct MoveTarget {
     private Transform lookTarget;
     private Vector3? lookUpDir = null;
     private bool lookAway;
+    public bool intangible;
     private Vector3 position;
     private Quaternion rotation;
     public MoveMode mode;
@@ -1176,6 +1247,7 @@ public struct MoveTarget {
     public float? jointSpring = null;
     public float? jointDamper = null;
     public float? jointMaxForce = null;
+    private Vector3? lookTargetPos;
 
     public MoveTarget(MoveMode mode, float speed = -1) {
         parent = null;
@@ -1189,9 +1261,21 @@ public struct MoveTarget {
         }
         this.mode = mode;
     }
+
+    public MoveTarget Intangible(bool intangible) {
+        this.intangible = intangible;
+        return this;
+    }
     
     public MoveTarget LookAt(Transform lookTarget, bool lookAway = false, Vector3? lookUpDir = null) {
         this.lookTarget = lookTarget;
+        this.lookUpDir = lookUpDir;
+        this.lookAway = lookAway;
+        return this;
+    }
+    
+    public MoveTarget LookAt(Vector3 lookTarget, bool lookAway = false, Vector3? lookUpDir = null) {
+        lookTargetPos = lookTarget;
         this.lookUpDir = lookUpDir;
         this.lookAway = lookAway;
         return this;
@@ -1263,14 +1347,24 @@ public struct MoveTarget {
     private Vector3 LookUpDir => lookUpDir is Vector3 dir
         ? parent != null && localRotation ? parent.transform.TransformDirection(dir) : dir
         : Vector3.up;
-    private Quaternion Rotation => lookTarget
-        ?
-        lookAway
-            ? Quaternion.LookRotation(Position - lookTarget.position, LookUpDir)
-            : Quaternion.LookRotation(lookTarget.position - Position, LookUpDir)
-        : parent != null && localRotation
-            ? parent.transform.rotation * rotation
-            : rotation;
+    private Quaternion Rotation {
+        get {
+            var target = lookTarget?.position ?? lookTargetPos;
+            if (target is not Vector3 targetPos)
+                return parent != null && localRotation
+                    ? parent.transform.rotation * rotation
+                    : rotation;
+            return lookAway
+                ? Quaternion.LookRotation(Position - targetPos, LookUpDir)
+                : Quaternion.LookRotation(targetPos - Position, LookUpDir);
+        }
+    }
+}
+
+public enum ReferenceFrame {
+    None,
+    Player,
+    Hand
 }
 
 public enum JointType {
